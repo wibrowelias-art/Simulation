@@ -224,7 +224,7 @@ body {
 .hit { position: relative; }
 .hit::after { content: ""; position: absolute; inset: -8px -2px; }
 .hit-lg { position: relative; }
-.hit-lg::after { content: ""; position: absolute; inset: -12px -2px; }
+.hit-lg::after { content: ""; position: absolute; inset: -12px -8px; }
 /* long-press feedback */
 .press { transition: background-color 0.15s; }
 .press[data-pressing] { background: var(--selected) !important; }

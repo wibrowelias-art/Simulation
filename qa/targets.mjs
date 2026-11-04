@@ -28,7 +28,7 @@ const audit = () => page.evaluate(() => {
     if (!top || !(el === top || el.contains(top))) continue;
     if (el.closest(".msg-text, .rich-inline")) continue; // inline links in text
     const hit = el.classList.contains("hit") ? 16 : el.classList.contains("hit-lg") ? 24 : 0;
-    const w = r.width + (hit ? 4 : 0), h = r.height + hit;
+    const w = r.width + (hit === 24 ? 16 : hit ? 4 : 0), h = r.height + hit; // matches .hit / .hit-lg in globals.css
     if (w < 43.5 || h < 43.5) out.push({ label: (el.getAttribute("aria-label") || el.textContent || el.tagName).trim().slice(0, 40), w: Math.round(w), h: Math.round(h) });
   }
   return out;
