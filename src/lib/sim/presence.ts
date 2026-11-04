@@ -212,7 +212,12 @@ export function reactCascade(s: WorldState, m: Message, emoji: string, now: numb
   const bank = fanish(o) ? B.reactFan : negish(o) ? B.reactNeg : B.reactMid;
   const t0 = now + rng.range(1.1, 2.2) * SEC;
   const first = msg(s, c, m.serverId, m.channelId, line(s, rng, c, bank, sl(s, rng, c, extra)), t0, now + rng.range(0.3, 0.7) * SEC, { replyTo: m.id, intent: "reacted" });
-  if (intensity >= 2) msg(s, c, m.serverId, m.channelId, line(s, rng, c, bank, sl(s, rng, c, extra)), t0 + rng.range(1, 2.5) * SEC, t0 + 200, { intent: "reacted" });
+  if (intensity >= 2) {
+    const second = msg(s, c, m.serverId, m.channelId, line(s, rng, c, bank, sl(s, rng, c, extra)), t0 + rng.range(1, 2.5) * SEC, t0 + 200, { intent: "reacted" });
+    // sometimes the follow-up is just a reaction gif of them losing it
+    const g = rngFor(s.seed, "cascade-gif", m.id); // own stream: the rest of the cascade stays as it was
+    if (g.chance(0.3)) second.meme = { f: "gif", hue: g.int(0, 360), seed: g.int(1, 1e6), top: g.pick(["me rn", "me after god reacted", "my face rn"]), art: g.pick(["😭", "🥹", "🕺", "🏃"]), motion: g.pick(["bob", "shake", "zoom"] as const) };
+  }
   let n = 1;
   const srv = s.servers.find((x) => x.id === m.serverId);
   if (srv) {
@@ -226,7 +231,7 @@ export function reactCascade(s: WorldState, m: Message, emoji: string, now: numb
     }
     // the message gets a burst of reactions, mostly copying god's emoji
     const burst = Math.round(rng.range(5, 12) * intensity);
-    for (let i = 0; i < burst; i++) (m.reactionLog ??= []).push([rng.chance(0.65) ? emoji : rng.pick(["😭", "👑", "🔥", "💀", "🙏"]), Math.round(now + rng.range(0.6, 25) * SEC), rng.pick(srv.members)]);
+    for (let i = 0; i < burst; i++) (m.reactionLog ??= []).push([i < 3 || rng.chance(0.65) ? emoji : rng.pick(["😭", "👑", "🔥", "💀", "🙏"]), Math.round(now + rng.range(0.6, 25) * SEC), rng.pick(srv.members)]);
     m.reactionLog?.sort((a, b) => a[1] - b[1]);
     for (const id of others.map((x) => x.id)) { const x = charById(s, id); if (fanish(obsessionOf(x))) x.bond = clamp((x.bond ?? 0) + 1, 0, 100); }
   }

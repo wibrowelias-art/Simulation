@@ -90,7 +90,7 @@ function jobFor(body: unknown): Job | undefined {
   }
   const r = sanitize(body);
   if (!r) return;
-  return { system: instructions(r), prompt: promptText(r), maxTokens: 300, parse: (t) => { const { lines, remember } = parseReply(t, r.persona.username); return lines.length ? { lines, remember } : undefined; } };
+  return { system: instructions(r), prompt: promptText(r), maxTokens: 300, parse: (t) => { const { lines, remember, meme } = parseReply(t, r.persona.username); return lines.length ? { lines, remember, meme } : undefined; } };
 }
 
 export async function POST(req: Request) {

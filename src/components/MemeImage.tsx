@@ -148,6 +148,44 @@ function Svg({ m, id }: { m: MemeSpec; id: string }) {
         </svg>
       );
     }
+    case "sticker": {
+      const arts = (m.arts ?? ["😭"]).slice(0, 5);
+      const pos = arts.length === 1 ? [[200, 200, 260]] : arts.map((_, i) => { const a = (i / arts.length) * Math.PI * 2 - Math.PI / 2; return [200 + Math.cos(a) * 105, 205 + Math.sin(a) * 105, 130]; });
+      return (
+        <svg viewBox="0 0 400 400">
+          {pos.map(([x, y, size], i) => (
+            <g key={i} className={`mm-${m.motion ?? "bob"}`} style={{ animationDelay: `${(i * 0.13).toFixed(2)}s` }}>
+              <Emoji e={arts[i]} x={x} y={y} size={size} />
+            </g>
+          ))}
+        </svg>
+      );
+    }
+    case "gif":
+      return (
+        <svg viewBox="0 0 400 400">
+          <Scene hue={m.hue} seed={m.seed} id={id} />
+          <g className={`mm-${m.motion ?? "bob"}`}><Emoji e={m.art} x={200} y={190} size={200} /></g>
+          {(m.motion === "shake" || m.motion === "zoom") && [0, 1, 2].map((i) => <path key={i} className="mm-lines" style={{ animationDelay: `${i * 0.2}s` }} d={`M${60 + i * 12} ${120 + i * 50} h-40 M${340 - i * 12} ${130 + i * 50} h40`} stroke="#fff" strokeWidth="6" strokeLinecap="round" opacity=".7" />)}
+          {m.top && <Caption text={m.top} y={378} size={28} max={22} anchor="bottom" />}
+          <g transform="translate(330 16)"><rect width="54" height="28" rx="6" fill="#000a" /><text x="27" y="20" textAnchor="middle" fontSize="15" fontWeight="900" fill="#fff" fontFamily={IMPACT}>GIF</text></g>
+        </svg>
+      );
+    case "quote": {
+      const body = wrap(`“${m.bottom ?? ""}”`, 22, 5);
+      return (
+        <svg viewBox="0 0 400 400">
+          <rect width="400" height="400" fill="#121216" />
+          <rect x="14" y="14" width="372" height="372" rx="18" fill="none" stroke="#e8b84a" strokeWidth="3" opacity=".8" />
+          {m.top && <text x="200" y="56" textAnchor="middle" fontSize="17" fontWeight="700" fill="#e8b84a" letterSpacing="2" fontFamily="ui-sans-serif, system-ui">{m.top.toUpperCase().slice(0, 34)}</text>}
+          <text x="200" y={210 - (body.length - 1) * 19} textAnchor="middle" fontSize="31" fontStyle="italic" fontWeight="600" fill="#f5f2ea" fontFamily="Georgia, 'Times New Roman', serif">
+            {body.map((l, i) => <tspan key={i} x="200" dy={i ? 38 : 0}>{l}</tspan>)}
+          </text>
+          <image href={GOD_AVATAR} x="128" y="318" width="36" height="36" clipPath="circle(18px at 18px 18px)" />
+          <text x="172" y="342" fontSize="17" fontWeight="700" fill="#e8b84a" fontFamily="ui-sans-serif, system-ui">— god {m.art ?? ""}</text>
+        </svg>
+      );
+    }
     case "chirpshot": {
       const s = m.shot!;
       const av = s.gold ? GOD_AVATAR : avatarUri((s.pfp ?? "default") as PfpStyle, s.seed, s.name);
@@ -182,14 +220,21 @@ export const MemeImage = memo(function MemeImage({ m, id, className, still }: { 
   }, [open]);
   // inside a card that opens on tap: just the picture, the card handles the tap
   if (still) return <div data-meme={m.f} role="img" aria-label={memeAlt(m)} className={className}><Svg m={m} id={sid} /></div>;
+  const sticker = m.f === "sticker";
+  const alt = memeAlt(m);
   return (
     <>
-      <button type="button" data-meme={m.f} aria-label={memeAlt(m)} onClick={(e) => { e.stopPropagation(); setOpen(true); }} className={className ?? "mt-1.5 block w-full max-w-[300px] overflow-hidden rounded-lg border border-line bg-black/20 [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"}>
+      <button type="button" data-meme={m.f} aria-label={alt} onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        className={className ?? (sticker
+          ? "mt-1 block aspect-square w-[128px] [&_svg]:block [&_svg]:h-full [&_svg]:w-full"
+          : "mt-1.5 block aspect-square w-full max-w-[300px] overflow-hidden rounded-lg border border-line bg-black/20 [&_svg]:block [&_svg]:h-full [&_svg]:w-full")}>
         <Svg m={m} id={sid} />
       </button>
       {open && typeof document !== "undefined" && createPortal(
-        <div role="dialog" aria-label="Image" onClick={() => setOpen(false)} className="fixed inset-0 z-[80] grid place-items-center bg-black/85 p-4">
-          <div className="w-full max-w-[min(92vw,560px)] overflow-hidden rounded-xl [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"><Svg m={m} id={`${sid}big`} /></div>
+        <div role="dialog" aria-modal="true" aria-label={alt} onClick={() => setOpen(false)} className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-black/90 p-4 pt-[max(1rem,env(safe-area-inset-top))]">
+          <button type="button" aria-label="Close image" onClick={() => setOpen(false)} className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] grid size-11 place-items-center rounded-full bg-white/10 text-[22px] leading-none text-white">×</button>
+          <div className={sticker ? "w-[min(70vw,360px)] [&_svg]:block [&_svg]:h-auto [&_svg]:w-full" : "w-full max-w-[min(92vw,560px)] overflow-hidden rounded-xl [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"}><Svg m={m} id={`${sid}big`} /></div>
+          <p className="max-w-[min(92vw,560px)] text-center text-[13px] text-white/70">{alt}</p>
         </div>, document.body)}
     </>
   );

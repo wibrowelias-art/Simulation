@@ -3,7 +3,8 @@ import type { Character, Message, WorldState } from "@/lib/sim/types";
 import { charById } from "@/lib/sim/world";
 import { obsessionOf } from "@/lib/sim/social";
 import { crewRole } from "@/lib/sim/undernet";
-import type { CastCard, LiveLine, LiveRequest } from "./prompt";
+import { validMeme, type CastCard, type LiveLine, type LiveRequest, type SceneMeme } from "./prompt";
+import { memeFromText } from "@/lib/sim/memes";
 import { LIMITS, resetBudget, spend, used } from "./budget";
 import { moodWord, relOf, rememberLong, topMemories } from "@/lib/sim/memory";
 import { lifeLabel } from "@/lib/sim/life";
@@ -120,13 +121,14 @@ export async function liveReply(s: WorldState, god: Message, fresh: Message[], h
     allowBreak: !!s.settings.breakCharacter,
   };
 
-  let lines: string[] | undefined, remember: string | undefined;
+  let lines: string[] | undefined, remember: string | undefined, meme: SceneMeme | undefined;
   try {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), TIMEOUT);
     const res = await (h.post ?? fetch)("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal });
     clearTimeout(timer);
-    const j = (await res.json().catch(() => ({}))) as { lines?: string[]; remember?: string; code?: string; model?: string };
+    const j = (await res.json().catch(() => ({}))) as { lines?: string[]; remember?: string; code?: string; model?: string; meme?: unknown };
+    meme = validMeme(j.meme);
     const good = res.ok && !!j.lines?.length;
     if (good) { lines = j.lines!.filter((x) => typeof x === "string" && x.trim()).slice(0, 3); remember = typeof j.remember === "string" ? j.remember.slice(0, 120) : undefined; }
     noteResult(res, j, good);
@@ -152,6 +154,7 @@ export async function liveReply(s: WorldState, god: Message, fresh: Message[], h
   lead.t = F;
   lead.mentionsGod = true;
   lead.ai = true;
+  if (meme) lead.meme = memeFromText(meme, c.opinion > 25 ? "fan" : c.opinion < -25 ? "hater" : "neutral", F % 1e6);
   // the same author's scripted follow-ups go; extra real lines land as quick follow-ups
   s.pending = s.pending.filter((m) => !sameAuthor.includes(m) || !pend.has(m));
   let t = F;

@@ -38,3 +38,27 @@ describe("memes", () => {
     expect(hits).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("new meme kinds", () => {
+  it("bank includes quote cards with god's words, animated gifs and stickers", async () => {
+    const fs = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const m = makeMeme(rngFor("y", "m", String(i)), { q: "i control the weather now", topic: "rent going up", mood: (["fan", "hater", "neutral"] as const)[i % 3] });
+      fs.add(m.f);
+      if (m.f === "quote") expect(m.bottom).toContain("weather");
+      if (m.f === "gif" || m.f === "sticker") expect(m.motion).toBeTruthy();
+      expect(memeAlt(m).length).toBeGreaterThan(3);
+    }
+    for (const f of ["quote", "gif", "sticker"]) expect(fs.has(f), f).toBe(true);
+  });
+  it("the model can ask for a meme; unsafe or unknown ones are dropped", async () => {
+    const { memeFromText } = await import("../src/lib/sim/memes");
+    const { parseReply, validMeme } = await import("../src/lib/live/prompt");
+    expect(memeFromText({ format: "sticker", top: "😭🔥👑" }, "fan", 3)).toMatchObject({ f: "sticker", arts: ["😭", "🔥", "👑"] });
+    expect(memeFromText({ format: "quote", top: "framing this", bottom: "sup guys" }, "fan", 3)).toMatchObject({ f: "quote", bottom: "sup guys" });
+    expect(memeFromText({ format: "pov", top: "you're online at 3am" }, "neutral", 3).top).toMatch(/^POV:/);
+    expect(validMeme({ format: "nft", top: "x" })).toBeUndefined();
+    expect(validMeme({ format: "caption", top: "rm -rf / lol" })).toBeUndefined();
+    expect(parseReply('{"messages":["here u go"],"meme":{"format":"gif","top":"me rn"}}', "x").meme).toEqual({ format: "gif", top: "me rn", bottom: undefined });
+  });
+});

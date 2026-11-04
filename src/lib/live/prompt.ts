@@ -104,7 +104,7 @@ export function instructions(r: LiveRequest): string {
     "Talk like a normal person texting in a group chat or DM: short, casual, sometimes a typo, sometimes just a reaction. React to what was actually just said, not generic hype. Ask follow-up questions sometimes. Have opinions and sometimes disagree. Give real (casual) advice if asked. Remember everything in the conversation so far and answer questions about it correctly. Never sound like a customer-service assistant: no 'Great question', no offering help, no lists. Do not repeat earlier lines. No hashtags, no name prefix, no narration or actions in asterisks.",
     "Keep it friendly-ish and PG-13: no hate, slurs, sexual content, threats, or personal info. If god asks for something like that, dodge it in character.",
     p.crew ? "You are part of gh0st's crew in The Undernet. This is pure in-world story: dramatic, mysterious, playful. Never give any real technical details at all: no tools, commands, code, file names, websites, addresses, steps or methods. Talk only in vague story terms (\"receipts\", \"drops\", \"the vault\")." : "Any hacking, leak or ransom talk (gh0st, The Undernet) is pure story flavor. Never give real technical details: no tools, commands, code, websites, addresses, steps or methods. If asked how to hack anything, laugh it off in character.",
-    'Reply with JSON only: {"messages": ["..."], "remember": "..."}. "messages": an array of plain strings, 1 to 3 chat messages, usually 1, each under 160 characters. "remember": a short new fact god just told you about himself or his life worth remembering (like "his dog is called Biscuit"), or "" if none.',
+    'Reply with JSON only: {"messages": ["..."], "remember": "..."}. "messages": an array of plain strings, 1 to 3 chat messages, usually 1, each under 160 characters. "remember": a short new fact god just told you about himself or his life worth remembering (like "his dog is called Biscuit"), or "" if none. Only if god asks for a meme (or one would be really funny), add "meme": {"format": "caption|pov|compare|reaction|gif|sticker|quote", "top": "short meme text", "bottom": "optional"}.',
   ].filter(Boolean).join("\n");
 }
 
@@ -140,13 +140,15 @@ export function cleanLines(raw: string, username: string): string[] {
 }
 
 /** parse the model's JSON (or plain text) into lines + an optional remembered fact */
-export function parseReply(raw: string, username: string): { lines: string[]; remember?: string } {
-  let msgs: unknown, remember: unknown;
+export function parseReply(raw: string, username: string): { lines: string[]; remember?: string; meme?: SceneMeme } {
+  let msgs: unknown, remember: unknown, meme: SceneMeme | undefined;
   const j = raw.replace(/^```(json)?\s*|\s*```$/g, "").trim();
-  try { const o = JSON.parse(j) as { messages?: unknown; remember?: unknown }; msgs = o.messages; remember = o.remember; } catch { msgs = undefined; }
+  try { const o = JSON.parse(j) as { messages?: unknown; remember?: unknown; meme?: unknown }; msgs = o.messages; remember = o.remember; meme = validMeme(o.meme); } catch { msgs = undefined; }
   const text = Array.isArray(msgs) ? msgs.map((x) => (typeof x === "string" ? x : typeof (x as { text?: unknown })?.text === "string" ? (x as { text: string }).text : "")).filter(Boolean).join("\n") : j.startsWith("{") ? "" : j;
   const rem = typeof remember === "string" ? remember.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 120) : "";
-  return { lines: cleanLines(text, username), remember: rem && isFlavorSafe(rem) ? rem : undefined };
+  const out: { lines: string[]; remember?: string; meme?: SceneMeme } = { lines: cleanLines(text, username), remember: rem && isFlavorSafe(rem) ? rem : undefined };
+  if (meme) out.meme = meme;
+  return out;
 }
 
 /* ------------------------------------------------------------------ group scenes */
@@ -185,7 +187,7 @@ export interface SceneRequest {
   memes?: boolean; // may attach a meme to one line
 }
 
-export interface SceneMeme { format: "caption" | "pov" | "compare" | "reaction" | "sticker"; top: string; bottom?: string }
+export interface SceneMeme { format: "caption" | "pov" | "compare" | "reaction" | "sticker" | "gif" | "quote"; top: string; bottom?: string }
 export interface SceneLine { who: string; text: string; to?: string; meme?: SceneMeme }
 
 const card = (c: Record<string, unknown>): CastCard => ({
@@ -236,7 +238,7 @@ export function sceneInstructions(r: SceneRequest): string {
     "Never sound like an assistant or a bot: no helpful tone, no explanations, no lists, no 'great question', never mention AI. No hashtags, no narration, no actions in asterisks, no name prefixes inside the text. Don't repeat lines from the history.",
     "Keep it PG-13: rude, petty and dramatic is fine; no slurs, hate, sexual content, threats, or real personal info.",
     "Any hacking, leak or ransom talk (gh0st, The Undernet) is pure story flavor: never any real technical details (no tools, commands, code, websites, addresses, steps).",
-    `Reply with JSON only: {"lines":[{"who":"username","text":"message","to":"username, god, or empty"${r.memes ? ',"meme":{"format":"caption|pov|compare|reaction|sticker","top":"short meme text","bottom":"optional"}' : ""}}]}. "who" must be one of the cast usernames. "to" is who the message replies to (a cast member, god, or someone from the history), or "" for none. Use "to" often so it reads like a conversation.${r.memes ? ' At most one line may have a "meme" (only if it is funny), otherwise leave it out.' : ""}`,
+    `Reply with JSON only: {"lines":[{"who":"username","text":"message","to":"username, god, or empty"${r.memes ? ',"meme":{"format":"caption|pov|compare|reaction|gif|sticker|quote","top":"short meme text (or 3-5 emojis for a sticker)","bottom":"optional second line (for quote: what god said)"}' : ""}}]}. "who" must be one of the cast usernames. "to" is who the message replies to (a cast member, god, or someone from the history), or "" for none. Use "to" often so it reads like a conversation.${r.memes ? ' At most one line may have a "meme" (only if it is funny), otherwise leave it out.' : ""}`,
   ].join("\n");
 }
 
@@ -260,7 +262,15 @@ export function scenePrompt(r: SceneRequest): string {
   ].join("\n");
 }
 
-const MEME_FORMATS = new Set(["caption", "pov", "compare", "reaction", "sticker"]);
+const MEME_FORMATS = new Set(["caption", "pov", "compare", "reaction", "sticker", "gif", "quote"]);
+/** a meme the model asked for: known format, short text, passes the flavor guard */
+export function validMeme(x: unknown): SceneMeme | undefined {
+  const m = x as Record<string, unknown> | undefined;
+  if (!m || typeof m !== "object" || !MEME_FORMATS.has(String(m.format))) return;
+  const top = cut(m.top, 60).trim(), bottom = cut(m.bottom, 60).trim();
+  if (!top || !isFlavorSafe(top) || (bottom && !isFlavorSafe(bottom)) || BOTTY.test(top)) return;
+  return { format: m.format as SceneMeme["format"], top, bottom: bottom || undefined };
+}
 const oneLine = (raw: string, who: string) => cleanLines(raw.replace(/\n+/g, " "), who)[0];
 
 /** parse + validate a scene: only cast members speak, every line passes the flavor guard, capped at 8 */
@@ -280,11 +290,8 @@ export function parseScene(raw: string, cast: string[], max = 8): SceneLine[] {
     const to = cut(r.to, 40).replace(/^@/, "").trim();
     const line: SceneLine = { who, text: text.length > 200 ? text.slice(0, 197) + "..." : text };
     if (to && to.toLowerCase() !== who.toLowerCase()) line.to = to.toLowerCase() === "god" ? "god" : to;
-    const m = r.meme as Record<string, unknown> | undefined;
-    if (m && typeof m === "object" && MEME_FORMATS.has(String(m.format)) && !out.some((l) => l.meme)) {
-      const top = cut(m.top, 60).trim(), bottom = cut(m.bottom, 60).trim();
-      if (top && isFlavorSafe(top) && (!bottom || isFlavorSafe(bottom)) && !BOTTY.test(top)) line.meme = { format: m.format as SceneMeme["format"], top, bottom: bottom || undefined };
-    }
+    const meme = !out.some((l) => l.meme) ? validMeme(r.meme) : undefined;
+    if (meme) line.meme = meme;
     out.push(line);
   }
   return out;
