@@ -4,9 +4,9 @@ import { indexedDbKV, type KV } from "@/lib/persistence/kv";
 import { clearWorld, createProfile, deleteProfile, listProfiles, loadWorld, saveWorld, setPasscode, updateProfile, verifyPasscode, type Profile } from "@/lib/persistence/profiles";
 import { applyAction, baseline, bootstrap, godEdit, godPin, godPost, godPostAction, godReact, godSay, resolveEvent, simulate, summarize, type ActionInput, type RippleResult } from "@/lib/sim/engine";
 import { createWorld } from "@/lib/sim/world";
-import { godJoinVoice, godLeaveVoice, godStopTyping, godTyping } from "@/lib/sim/presence";
+import { godAbandonTyping, godJoinVoice, godLeaveVoice, godTyping, voiceChannels } from "@/lib/sim/presence";
 import { liveReply, pickLead } from "@/lib/live/client";
-import { ambientTick, liveScene, type SceneHooks } from "@/lib/live/scene";
+import { ambientTick, liveMoment, liveScene, type SceneHooks } from "@/lib/live/scene";
 import { isIdle, noteActivity } from "@/lib/live/budget";
 import type { CatchUpSummary, PlatformId, Settings, WorldState } from "@/lib/sim/types";
 
@@ -299,14 +299,47 @@ export const doSay = (serverId: string, channelId: string, text: string, replyTo
   }
   return r;
 });
-export const doEdit = (id: string, text: string) => mutate((w, now) => godEdit(w, id, text, now));
-export const doDelete = (id: string) => mutate((w, now) => godEdit(w, id, null, now));
-export const doReact = (id: string, emoji: string) => mutate((w, now) => { simulate(w, now); return godReact(w, id, emoji, now); });
-export const doTyping = (serverId: string, channelId: string) => mutate((w, now) => { simulate(w, now); return godTyping(w, serverId, channelId, now); });
-export const doStopTyping = (channelId: string) => mutate((w, now) => godStopTyping(w, channelId, now));
-export const doJoinVoice = (serverId: string, vcId: string) => mutate((w, now) => { simulate(w, now); return godJoinVoice(w, serverId, vcId, now); });
-export const doLeaveVoice = () => mutate((w, now) => { simulate(w, now); return godLeaveVoice(w, now); });
-export const doPin = (id: string) => mutate((w, now) => godPin(w, id, now));
+/** run a god presence action, then let the room's scripted reaction be rewritten live (one call per moment) */
+const withMoment = <T,>(fn: (w: WorldState, now: number) => T, describe: (w: WorldState, r: T) => { text: string; first?: string } | undefined) => mutate((w, now) => {
+  const before = new Set(w.pending);
+  const r = fn(w, now);
+  const fresh = w.pending.filter((m) => !before.has(m));
+  const d = fresh.length >= 2 ? describe(w, r) : undefined;
+  if (d) void liveMoment(w, fresh, d.text, liveHooks(w), d.first);
+  return r;
+});
+const findMsg = (w: WorldState, id: string) => w.messages.find((x) => x.id === id) ?? w.pending.find((x) => x.id === id);
+const quote = (t: string) => `"${t.length > 80 ? t.slice(0, 78) + "…" : t}"`;
+const chName = (w: WorldState, channelId: string) => w.servers.flatMap((x) => x.channels).find((c) => c.id === channelId)?.name ?? "the chat";
+const userOf = (w: WorldState, id: string) => (id.startsWith("c") ? w.characters[Number(id.slice(1))]?.username : undefined);
+
+export const doEdit = (id: string, text: string) => {
+  const old = st.world && findMsg(st.world, id)?.text;
+  return withMoment((w, now) => godEdit(w, id, text, now), () => (old ? { text: `god edited his message from ${quote(old)} to ${quote(text)} and people noticed` } : undefined));
+};
+export const doDelete = (id: string) => {
+  const old = st.world && findMsg(st.world, id)?.text;
+  return withMoment((w, now) => godEdit(w, id, null, now), () => (old ? { text: `god deleted his message ${quote(old)} a few seconds after sending it, but people saw it` } : undefined));
+};
+export const doReact = (id: string, emoji: string) => withMoment((w, now) => { simulate(w, now); return godReact(w, id, emoji, now); }, (w) => {
+  const m = findMsg(w, id);
+  const u = m && userOf(w, m.authorId);
+  return m && u ? { text: `god reacted ${emoji} to @${u}'s message ${quote(m.text)}`, first: u } : undefined;
+});
+export const doTyping = (serverId: string, channelId: string) => withMoment((w, now) => { simulate(w, now); return godTyping(w, serverId, channelId, now); }, (w) => ({ text: `the typing indicator shows god is typing in #${chName(w, channelId)} (he hasn't sent anything yet)` }));
+export const doStopTyping = (channelId: string) => withMoment((w, now) => godAbandonTyping(w, channelId, now), (w) => ({ text: `god was typing in #${chName(w, channelId)}, then stopped and sent nothing` }));
+export const doJoinVoice = (serverId: string, vcId: string) => withMoment((w, now) => { simulate(w, now); return godJoinVoice(w, serverId, vcId, now); }, (w) => {
+  const srv = w.servers.find((x) => x.id === serverId);
+  const vc = srv && voiceChannels(srv).find((v) => v.id === vcId);
+  return { text: `god just joined the voice channel "${vc?.name ?? "voice"}" and people are rushing in to join him` };
+});
+export const doLeaveVoice = () => withMoment((w, now) => { const since = w.voice?.god?.since ?? now; simulate(w, now); godLeaveVoice(w, now); return Math.round((now - since) / 60e3); }, (_w, mins) => ({ text: `god just left the voice channel after ${Math.max(1, mins)} minutes` }));
+export const doPin = (id: string) => withMoment((w, now) => godPin(w, id, now), (w) => {
+  const m = findMsg(w, id);
+  if (!m?.pinnedAt) return undefined;
+  const u = userOf(w, m.authorId);
+  return { text: u ? `god pinned @${u}'s message ${quote(m.text)} to the channel` : `god pinned his own message ${quote(m.text)}`, first: u };
+});
 export const doPostAction = (id: string, kind: "like" | "repost") => mutate((w) => godPostAction(w, id, kind));
 export const doPost = (platform: PlatformId, text: string, quoteOf?: string, replyTo?: string) =>
   mutate((w, now) => { const r = godPost(w, platform, text, now, quoteOf, replyTo); if (r.breaking) set({ breaking: r }); return r; });

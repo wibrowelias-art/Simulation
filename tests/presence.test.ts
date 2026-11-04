@@ -126,3 +126,81 @@ describe("privacy", () => {
     expect(JSON.stringify(memeFor(s, rng, c, topic))).not.toContain("zebra");
   });
 });
+
+describe("every presence moment gets a reaction within 3 s, once", () => {
+  const firstAt = (s: ReturnType<typeof fresh>, before: Set<unknown>) => Math.min(...s.pending.filter((m) => !before.has(m) && m.authorId.startsWith("c")).map((m) => m.t));
+  const diff = (s: ReturnType<typeof fresh>, fn: () => unknown) => { const before = new Set(s.pending); fn(); return { before, added: s.pending.filter((m) => !before.has(m) && m.authorId.startsWith("c")) }; };
+
+  it("typing, then clearing without sending", async () => {
+    const { godAbandonTyping } = await import("../src/lib/sim/presence");
+    const s = fresh("m1");
+    const t = diff(s, () => godTyping(s, SRV, CH, now));
+    expect(firstAt(s, t.before) - now).toBeLessThan(3000);
+    const q = diff(s, () => godAbandonTyping(s, CH, now + 6 * SEC));
+    expect(q.added.length).toBeGreaterThan(0);
+    expect(firstAt(s, q.before) - (now + 6 * SEC)).toBeLessThan(3000);
+    expect(diff(s, () => godAbandonTyping(s, CH, now + 8 * SEC)).added).toHaveLength(0); // same moment: no repeat
+  });
+
+  it("voice join and leave", () => {
+    const s = fresh("m2");
+    const vc = voiceChannels(s.servers.find((x) => x.id === SRV)!)[0];
+    const j = diff(s, () => godJoinVoice(s, SRV, vc.id, now));
+    expect(firstAt(s, j.before) - now).toBeLessThan(3000);
+    const l = diff(s, () => godLeaveVoice(s, now + 2 * MIN));
+    expect(l.added.length).toBeGreaterThan(0);
+    expect(firstAt(s, l.before) - (now + 2 * MIN)).toBeLessThan(3000);
+  });
+
+  it("reactions: a run within 3 s is one moment", () => {
+    const s = fresh("m3");
+    const msgs = s.messages.filter((m) => m.channelId === CH && m.authorId.startsWith("c") && m.kind === "chat").slice(-3);
+    const a = diff(s, () => godReact(s, msgs[0].id, "🔥", now));
+    expect(a.added.length).toBeGreaterThanOrEqual(3);
+    expect(firstAt(s, a.before) - now).toBeLessThan(3000);
+    const b = diff(s, () => godReact(s, msgs[1].id, "🔥", now + 1500));
+    expect(b.added.length).toBe(1); // only that author notices; no second pile-on
+    expect(diff(s, () => godReact(s, msgs[0].id, "😭", now + 2000)).added.length).toBe(0); // already cascaded
+  });
+
+  it("pin, edit and delete", async () => {
+    const { godEdit, godPin } = await import("../src/lib/sim/engine");
+    const s = fresh("m4");
+    const target = s.messages.filter((m) => m.channelId === CH && m.authorId.startsWith("c") && m.kind === "chat").at(-1)!;
+    const p = diff(s, () => godPin(s, target.id, now));
+    expect(p.added.some((m) => m.authorId === target.authorId && m.replyTo === target.id)).toBe(true);
+    expect(firstAt(s, p.before) - now).toBeLessThan(3000);
+    godPin(s, target.id, now + SEC); // unpin
+    expect(diff(s, () => godPin(s, target.id, now + 2 * SEC)).added).toHaveLength(0); // re-pin: already reacted
+    const r = godSay(s, SRV, CH, "lowkey bored", now + 10 * SEC);
+    simulate(s, now + 15 * SEC);
+    const e = diff(s, () => godEdit(s, r.message.id, "lowkey bored ngl", now + 15 * SEC));
+    expect(e.added.length).toBeGreaterThan(0);
+    expect(firstAt(s, e.before) - (now + 15 * SEC)).toBeLessThan(3000);
+    const d = diff(s, () => godEdit(s, r.message.id, null, now + 30 * SEC));
+    expect(d.added.length).toBeGreaterThan(1);
+    expect(d.added.every((m) => m.intent === "sawDelete")).toBe(true);
+  });
+
+  it("live: one call per moment, and only lines that haven't landed are swapped", async () => {
+    const { liveMoment, resetScenes } = await import("../src/lib/live/scene");
+    const { resetLive } = await import("../src/lib/live/client");
+    resetLive(); resetScenes();
+    const s = fresh("m5");
+    const t = diff(s, () => godTyping(s, SRV, CH, now));
+    let calls = 0;
+    const post = (async (_u: unknown, init?: RequestInit) => {
+      calls++;
+      const b = JSON.parse(String(init?.body));
+      expect(b.moment).toMatch(/typing/);
+      return Response.json({ lines: b.cast.map((c: { username: string }, i: number) => ({ who: c.username, text: `he's typing for real ${i} omg` })) });
+    }) as unknown as typeof fetch;
+    const at = now + 1200; // the first scripted line may already be out by the time the answer comes
+    const r = await liveMoment(s, t.added, "god is typing in #general", { now: () => at, changed: () => {}, post });
+    expect(r).toBe("live");
+    expect(t.added.filter((m) => m.t <= at).every((m) => !m.ai)).toBe(true);
+    expect(t.added.some((m) => m.ai)).toBe(true);
+    expect(liveMoment(s, t.added, "again", { now: () => at + 1000, changed: () => {}, post })).toBeUndefined();
+    expect(calls).toBe(1);
+  });
+});

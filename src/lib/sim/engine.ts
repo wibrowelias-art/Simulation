@@ -11,7 +11,7 @@ import { fmtMoney } from "./format";
 import { STRICT_BEATS } from "./servers";
 import { ambientDm, godSpeak, handleBus } from "./godspeak";
 import { undernetBus, undernetOnAction, undernetTick, type EngineHooks } from "./undernet";
-import { reactCascade, voiceTick } from "./presence";
+import { editReact, pinReact, reactCascade, voiceTick } from "./presence";
 import { makeMeme, MEME_LINES, type MemeSpec } from "./memes";
 
 export const BUCKET = 10_000;
@@ -741,8 +741,10 @@ export function godSay(s: WorldState, serverId: string, channelId: string, text:
 export function godEdit(s: WorldState, id: string, text: string | null, now: number) {
   const m = s.messages.find((x) => x.id === id) ?? s.pending.find((x) => x.id === id);
   if (!m || m.authorId !== "god") return false;
+  const old = m.text;
   if (text === null) { m.deleted = true; m.text = ""; m.reactionLog = []; m.reactions = []; }
   else { m.text = text; m.editedAt = now; delete m.editText; }
+  if (old && old !== text) editReact(s, m, old, text === null, now);
   const g = s.godLog.find((x) => x.id === id);
   if (g) { if (text === null) s.godLog = s.godLog.filter((x) => x.id !== id); else g.text = text; }
   return true;
@@ -762,7 +764,8 @@ export function godReact(s: WorldState, id: string, emoji: string, now?: number)
 export function godPin(s: WorldState, id: string, now: number) {
   const m = s.messages.find((x) => x.id === id) ?? s.pending.find((x) => x.id === id);
   if (!m) return;
-  if (m.pinnedAt && m.pinnedAt <= now) delete m.pinnedAt; else m.pinnedAt = now;
+  if (m.pinnedAt && m.pinnedAt <= now) delete m.pinnedAt;
+  else { m.pinnedAt = now; if (m.serverId !== "dm" && !m.pinReacted) { m.pinReacted = true; pinReact(s, m, now); } }
 }
 
 /** @god likes / reposts a post (toggle). Counts move by exactly one. */

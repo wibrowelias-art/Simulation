@@ -121,6 +121,7 @@ export interface Message {
   reactions: Reaction[];
   kind?: "chat" | "system" | "bot" | "meme";
   cascaded?: boolean; // god already reacted here and the room freaked out
+  pinReacted?: boolean; // god pinned it and the room already reacted
   intent?: string; // conversational move that produced it (open, reply, pileon, drift, mod...)
   score: number; // engagement / value for pruning
   typingFrom?: number; // when the author started typing (typing indicator)
@@ -331,7 +332,7 @@ export interface VoiceState {
   lines: { t: number; serverId: string; channelId: string; who: string; text: string }[]; // overheard transcript
 }
 
-export interface GodMoment { t: number; kind: "typing" | "react" | "voice" | "voiceLeave" | "command" | "leak"; text: string; link?: string }
+export interface GodMoment { t: number; kind: "typing" | "typingQuit" | "react" | "voice" | "voiceLeave" | "command" | "leak" | "pin" | "edit" | "delete"; text: string; link?: string }
 
 export interface CatchUpSummary {
   from: number;

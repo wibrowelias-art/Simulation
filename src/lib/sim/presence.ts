@@ -37,6 +37,18 @@ const B = {
   cmdRoast: ["{target}? your takes have a loading screen 💀", "{target} still uses the default pfp energy", "{target}, even your alt accounts mute you", "{target} types like their keyboard owes them money", "{target}'s group chat has a {target}-free version"],
   cmdRoastBack: ["wow ok. sent by HIM?? 😭", "i'm not even mad. god sent this. it's an honor.", "ok that's fair actually", "this is targeted harassment (i love it)"],
   cmdGeneric: ["on it boss", "say less", "ok ok i'll try: '{q}'", "doing it right now", "anything for you god"],
+  typingQuit: ["he stopped typing 😭", "NO HE STOPPED", "he typed and deleted it. what was it", "the dots are gone 😭", "who scared him off", "god drafted something and said nah", "it's ok he'll come back", "y'all were too loud", "he really typed for {secs}s and sent nothing"],
+  typingQuitNeg: ["lmao he chickened out", "drafted an essay and deleted it 💀", "thank god he stopped", "even he didn't want to send it"],
+  pinFan: ["HE PINNED MY MESSAGE 😭", "PINNED. BY GOD. i'm framing this", "i'm in the pins now. i'm immortal", "mom i'm in the pins", "no way he pinned that 😭"],
+  pinNeg: ["he pinned me? weird flex but ok", "great, now everyone's gonna read that", "pinned. ok. whatever. (screenshotted)"],
+  pinOthers: ["god pinned {user}'s message 😭", "{user} is in the pins now", "why does {user} get pinned", "pin of the year", "{user} peaked", "the pins are canon now"],
+  pinSelf: ["he pinned his own message 💀", "self pin is crazy", "pinned so nobody forgets lmao", "the man pinned himself"],
+  edited: ["he edited it 👀", "wait what did it say before", "i saw the original", "(edited) 👀👀", "the edit is suspicious", "nah what was the first version", "he fixed it lol"],
+  editedNeg: ["caught editing 💀", "edited. noted.", "ctrl+z king"],
+  deleted: ["he deleted it, i saw it", "WAIT he deleted it", "screenshotted before he deleted it 📸", "what did it say??", "it's gone 😭", "i saw it. i'm not telling", "deleted messages are the loudest", "nah he deleted \"{q}\" 💀"],
+  deletedNeg: ["deleting doesn't work, we saw it", "receipts saved 📸", "lmao deleted"],
+  dmEdited: ["wait you edited that", "lol what did you change"],
+  dmDeleted: ["wait what did you delete", "i saw that 👀", "lol you deleted something"],
   voiceChat: ["HE JOINED VC", "GOD IS IN VOICE RUN", "NO WAY 😭 joining", "who's in vc rn??", "HE'S IN THE VOICE LOUNGE", "everybody unmute", "my mic is so bad rn noooo", "joining joining joining", "i'm too nervous to join"],
   voiceNeg: ["oh great he's in vc", "not joining. (joining)", "he's gonna make it weird"],
   voiceLeave: ["he left 😭", "it was the dog barking wasn't it", "come back 😭", "who scared him off", "that was the best 4 minutes of my life", "ok that was cool"],
@@ -99,6 +111,79 @@ export function godStopTyping(s: WorldState, channelId: string, now: number) {
   s.pending = s.pending.filter((m) => !(m.channelId === channelId && m.intent === "godTyping" && m.t > now + 400));
 }
 
+/** god cleared the composer without sending: the room notices (once per typing moment) */
+export function godAbandonTyping(s: WorldState, channelId: string, now: number): number {
+  godStopTyping(s, channelId, now);
+  const srv = s.servers.find((x) => x.channels.some((c) => c.id === channelId));
+  if (!srv) return 0;
+  const link = `lounge:${srv.id}:${channelId}`;
+  const ms = s.godMoments ?? [];
+  const typing = [...ms].reverse().find((g) => g.kind === "typing" && g.link === link);
+  if (!typing || now - typing.t > 90 * SEC || ms.some((g) => g.kind === "typingQuit" && g.link === link && g.t >= typing.t)) return 0;
+  const rng = rngFor(s.seed, "quit", channelId, Math.floor(now / 1000));
+  const people = pickPeople(s, rng, srv, rng.int(1, 3), now, (o) => (fanish(o) ? 4 : negish(o) ? 1.5 : 0.6));
+  let t = now + rng.range(1, 1.8) * SEC;
+  people.forEach((c, i) => {
+    const bank = negish(obsessionOf(c)) ? B.typingQuitNeg : B.typingQuit;
+    msg(s, c, srv.id, channelId, line(s, rng, c, bank, sl(s, rng, c, { secs: String(Math.max(2, Math.round((now - typing.t) / SEC))) })), t, t - rng.range(0.8, 1.6) * SEC, { intent: "typingQuit" });
+    t += rng.range(0.8, 2.2) * SEC * (i + 1);
+  });
+  moment(s, { t: now, kind: "typingQuit", text: `You started typing in #${srv.channels.find((c) => c.id === channelId)?.name} and stopped. ${people.length} people noticed`, link });
+  return people.length;
+}
+
+/** god pinned a message (not unpinning): the author and the room react */
+export function pinReact(s: WorldState, m: Message, now: number): number {
+  const srv = s.servers.find((x) => x.id === m.serverId);
+  if (!srv) return 0;
+  const rng = rngFor(s.seed, "pin", m.id);
+  let n = 0;
+  let t = now + rng.range(1, 1.8) * SEC;
+  const author = m.authorId.startsWith("c") ? charById(s, m.authorId) : undefined;
+  if (author) {
+    const o = obsessionOf(author);
+    msg(s, author, srv.id, m.channelId, line(s, rng, author, negish(o) ? B.pinNeg : B.pinFan, sl(s, rng, author)), t, now + 400, { intent: "pinned", replyTo: m.id });
+    t += rng.range(0.8, 2) * SEC; n++;
+    author.bond = clamp((author.bond ?? 0) + 6, 0, 100);
+    author.memory.push({ topicId: m.topicId ?? "", label: "the time god pinned my message", t: now, feeling: 0.8 });
+    if (author.memory.length > 12) author.memory.shift();
+  }
+  for (const c of pickPeople(s, rng, srv, rng.int(1, 3), now, (o) => (fanish(o) ? 3 : 1), new Set(author ? [author.id] : []))) {
+    msg(s, c, srv.id, m.channelId, line(s, rng, c, author ? B.pinOthers : B.pinSelf, sl(s, rng, c, { user: author?.username ?? "god" })), t, t - rng.range(1, 2) * SEC, { intent: "pinned" });
+    t += rng.range(0.8, 2.4) * SEC; n++;
+  }
+  moment(s, { t: now, kind: "pin", text: author ? `You pinned @${author.username}'s message. ${n} people reacted` : `You pinned your own message in ${srv.name}`, link: `lounge:${srv.id}:${m.channelId}` });
+  return n;
+}
+
+/** god edited or deleted his message after people had seen it */
+export function editReact(s: WorldState, m: Message, oldText: string, deleted: boolean, now: number): number {
+  if (now - m.t < 1500) return 0; // nobody saw it yet
+  const rng = rngFor(s.seed, deleted ? "del" : "edit", m.id, Math.floor(now / 1000));
+  const q = oldText.length > 40 ? oldText.slice(0, 38) + "…" : oldText;
+  if (m.serverId === "dm") {
+    const peer = m.channelId.split(":").slice(1).find((x) => x !== "god");
+    const c = peer?.startsWith("c") ? charById(s, peer) : undefined;
+    if (!c || !rng.chance(0.7)) return 0;
+    const t = now + rng.range(1.5, 3) * SEC;
+    msg(s, c, "dm", m.channelId, line(s, rng, c, deleted ? B.dmDeleted : B.dmEdited, sl(s, rng, c)), t, t - 1500, { intent: deleted ? "sawDelete" : "sawEdit" });
+    return 1;
+  }
+  const srv = s.servers.find((x) => x.id === m.serverId);
+  if (!srv) return 0;
+  const last = [...(s.godMoments ?? [])].reverse().find((g) => (g.kind === "edit" || g.kind === "delete") && g.link === `lounge:${srv.id}:${m.channelId}`);
+  if (last && now - last.t < 3 * SEC) return 0; // a run of edits is one moment
+  const people = pickPeople(s, rng, srv, deleted ? rng.int(2, 4) : rng.int(1, 3), now, (o) => (fanish(o) ? 3 : negish(o) ? 2 : 1));
+  let t = now + rng.range(1, 2) * SEC;
+  for (const c of people) {
+    const bank = deleted ? (negish(obsessionOf(c)) ? B.deletedNeg : B.deleted) : negish(obsessionOf(c)) ? B.editedNeg : B.edited;
+    msg(s, c, srv.id, m.channelId, line(s, rng, c, bank, sl(s, rng, c, { q })), t, t - rng.range(0.9, 2) * SEC, { intent: deleted ? "sawDelete" : "sawEdit", replyTo: !deleted && rng.chance(0.4) ? m.id : undefined });
+    t += rng.range(0.8, 2.6) * SEC;
+  }
+  moment(s, { t: now, kind: deleted ? "delete" : "edit", text: `You ${deleted ? "deleted" : "edited"} a message in ${srv.name}. ${people.length} people noticed`, link: `lounge:${srv.id}:${m.channelId}` });
+  return people.length;
+}
+
 // ---------------------------------------------------------------- reaction cascade
 export function reactCascade(s: WorldState, m: Message, emoji: string, now: number): number {
   if (!m.authorId.startsWith("c") || m.cascaded) return 0;
@@ -106,6 +191,15 @@ export function reactCascade(s: WorldState, m: Message, emoji: string, now: numb
   const c = charById(s, m.authorId);
   const o = obsessionOf(c);
   const rng = rngFor(s.seed, "cascade", m.id, emoji);
+  const link = m.serverId === "dm" ? `lounge:dm:${m.channelId}` : `lounge:${m.serverId}:${m.channelId}`;
+  const prevReact = [...(s.godMoments ?? [])].reverse().find((g) => g.kind === "react" && g.link === link);
+  if (prevReact && now - prevReact.t < 3 * SEC) {
+    // a run of reactions within 3 s is one moment: this author notices, the room doesn't start over
+    msg(s, c, m.serverId, m.channelId, line(s, rng, c, fanish(o) ? B.reactFan : negish(o) ? B.reactNeg : B.reactMid, sl(s, rng, c, { emoji, user: c.username })), now + rng.range(1.2, 2.4) * SEC, now + 400, { replyTo: m.id, intent: "reacted" });
+    for (let i = 0; i < 4; i++) (m.reactionLog ??= []).push([rng.chance(0.65) ? emoji : "😭", Math.round(now + rng.range(0.6, 12) * SEC), c.id]);
+    c.bond = clamp((c.bond ?? 0) + 4, 0, 100);
+    return 1;
+  }
   const extra = { emoji, user: c.username };
   const intensity = o === "obsessed" ? 3 : o === "supporter" ? 2 : negish(o) ? 1.2 : 1;
   const bank = fanish(o) ? B.reactFan : negish(o) ? B.reactNeg : B.reactMid;

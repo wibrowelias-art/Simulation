@@ -171,5 +171,26 @@ export function ambientTick(s: WorldState, h: SceneHooks): Promise<"live" | "fal
   return liveScene(s, g, { mode: "ambient", lane: "ambient", hold: true, about }, h).finally(() => { inflight = false; });
 }
 
+/* ------------------------------------------------------------------ presence moments */
+
+const lastMoment = new Map<string, number>();
+export const MOMENT_DEBOUNCE = 3000;
+
+/**
+ * God did something (typing, reacting, voice, pin, edit, delete) and the engine already queued the scripted
+ * reaction in `fresh`. One cheap call per moment rewrites the lines that haven't landed yet; a run of moments
+ * in the same channel within 3 s counts as one (no second call).
+ */
+export function liveMoment(s: WorldState, fresh: Message[], moment: string, h: SceneHooks, first?: string): Promise<"live" | "fallback" | "skipped"> | undefined {
+  const mine = fresh.filter((m) => m.authorId.startsWith("c") && m.kind === "chat");
+  if (mine.length < 2) return;
+  const ch = mine[0].channelId;
+  const now = h.now();
+  if (now - (lastMoment.get(ch) ?? -Infinity) < MOMENT_DEBOUNCE) return;
+  lastMoment.set(ch, now);
+  if (lastMoment.size > 200) lastMoment.clear();
+  return liveScene(s, mine.filter((m) => m.channelId === ch), { mode: "moment", lane: "moment", moment, first }, h);
+}
+
 /** test helper */
-export function resetScenes() { handled.clear(); inflight = false; }
+export function resetScenes() { handled.clear(); inflight = false; lastMoment.clear(); }
