@@ -164,3 +164,23 @@ describe("crowd scene after god speaks", () => {
     for (let i = 1; i < live.length; i++) expect(live[i].t).toBeGreaterThanOrEqual(live[i - 1].t);
   });
 });
+
+describe("the room talks to each other when god speaks (scripted baseline)", () => {
+  it("'sup guys': 4+ speakers in 20 s, 2+ replies between characters, at least one disagreement", async () => {
+    const { godSay } = await import("../src/lib/sim/engine");
+    for (const seed of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
+      const s = world(seed);
+      const { srv, ch } = general(s);
+      const now = T0 + 120_000;
+      simulate(s, now);
+      const before = new Set(s.pending);
+      godSay(s, srv.id, ch.id, "sup guys", now);
+      const early = s.pending.filter((m) => !before.has(m) && m.authorId.startsWith("c") && !m.threadOf && m.t <= now + 20_000);
+      const all = [...s.messages, ...s.pending];
+      const c2c = early.filter((m) => m.replyTo && all.find((y) => y.id === m.replyTo)?.authorId.startsWith("c"));
+      expect(new Set(early.map((m) => m.authorId)).size, seed).toBeGreaterThanOrEqual(4);
+      expect(c2c.length, seed).toBeGreaterThanOrEqual(2);
+      expect(early.some((m) => m.intent === "disagree"), seed).toBe(true);
+    }
+  });
+});

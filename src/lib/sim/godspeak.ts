@@ -226,6 +226,18 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
   const total = Math.round(clamp((9 + srv.bias * 8 + rng.poisson(3)) * act, 6, 30));
   let conflicts = 0, modded = false, drifted = 0;
   for (let i = 0; i < total; i++) {
+    // a real room never fully agrees: if nobody has clashed by the fourth line, someone pushes back on a fan
+    if (i === 3 && conflicts === 0) {
+      const fanLine = [...b.msgs].reverse().find((m) => m.authorId.startsWith("c") && !m.threadOf && fanish(obsessionOf(charById(s, m.authorId))));
+      const A = fanLine && audience(x, (o) => (negish(o) ? 5 : o === "skeptic" ? 3 : o === "indifferent" ? 0.6 : 0.05), new Set([fanLine.authorId]), b.cur);
+      if (fanLine && A && !fanish(obsessionOf(A))) {
+        const B = charById(s, fanLine.authorId);
+        say(A, line(s, rng, A, negish(obsessionOf(A)) ? CHAIN.haterToFan : CHAIN.skepticToFan, slots(x, A, B)), { replyTo: fanLine.id, intent: "disagree", gap: [0.9 * SEC, 2.4 * SEC] });
+        conflicts++;
+        if (rng.chance(0.7)) say(B, line(s, rng, B, CHAIN.fanToHater, slots(x, B, A)), { replyTo: b.msgs[b.msgs.length - 1].id, intent: "disagree", gap: [1 * SEC, 2.6 * SEC] });
+        continue;
+      }
+    }
     const r = rng.next();
     const prev = b.msgs.length ? b.msgs[b.msgs.length - 1] : god;
     const gap: [number, number] = i < 6 ? [0.9 * SEC, 3.2 * SEC] : [1.8 * SEC, 7 * SEC];
@@ -251,16 +263,19 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
       const pick = rng.chance(0.6) ? prev : rng.pick(b.msgs);
       if (pick.authorId === "god" || !pick.authorId.startsWith("c")) continue;
       const B = charById(s, pick.authorId), ob = obsessionOf(B);
-      const A = audience(x, (o) => (fanish(ob) ? (negish(o) || o === "skeptic" ? 3 : fanish(o) ? 2 : 0.5) : negish(ob) ? (fanish(o) ? 4 : 0.5) : 1), new Set([B.id]), b.cur);
+      // friends jump in to back them up, rivals to start something
+      const A = audience(x, (o, c) => (fanish(ob) ? (negish(o) || o === "skeptic" ? 3 : fanish(o) ? 2 : 0.5) : negish(ob) ? (fanish(o) ? 4 : 0.5) : 1) * (B.friends.includes(c.id) || B.rivals.includes(c.id) ? 3 : 1), new Set([B.id]), b.cur);
       if (!A) continue;
       const oa = obsessionOf(A);
       let bank: string[];
-      if (fanish(oa) && negish(ob)) { bank = CHAIN.fanToHater; conflicts++; }
-      else if (negish(oa) && fanish(ob)) { bank = CHAIN.haterToFan; conflicts++; }
-      else if (oa === "skeptic" && fanish(ob)) bank = CHAIN.skepticToFan;
+      let clash = false;
+      if (B.rivals.includes(A.id) && !fanish(oa) !== !fanish(ob)) { bank = fanish(oa) ? CHAIN.fanToHater : CHAIN.haterToFan; conflicts++; clash = true; }
+      else if (fanish(oa) && negish(ob)) { bank = CHAIN.fanToHater; conflicts++; clash = true; }
+      else if (negish(oa) && fanish(ob)) { bank = CHAIN.haterToFan; conflicts++; clash = true; }
+      else if (oa === "skeptic" && fanish(ob)) { bank = CHAIN.skepticToFan; clash = true; }
       else if (fanish(oa) && fanish(ob)) bank = rng.chance(0.7) ? CHAIN.fanToFan : CHAIN.noticed;
       else bank = CHAIN.noticed;
-      say(A, line(s, rng, A, bank, slots(x, A, B)), { replyTo: rng.chance(0.75) ? pick.id : undefined, intent: "chain", gap });
+      say(A, line(s, rng, A, bank, slots(x, A, B)), { replyTo: clash || rng.chance(0.75) ? pick.id : undefined, intent: clash ? "disagree" : "chain", gap });
       if (rng.chance(0.25)) (pick.reactionLog ??= []).push([rng.pick(negish(oa) ? ["💀", "🤡"] : ["😭", "💯", "🔥"]), Math.round(b.cur + rng.range(1, 6) * SEC), A.id]);
     } else if (r < 0.78) {
       const c = audience(x, (o) => (fanish(o) ? 2 : o === "business" ? 1.5 : 0.6), new Set(), b.cur);
