@@ -9,6 +9,7 @@ import { obsessionOf } from "./social";
 import { getGenerator, slotsFor } from "./generator";
 import { fmtMoney } from "./format";
 import { crewDmReply, crewRole } from "./undernet";
+import { adjustRel, nudgeMood, relOf, rememberLong, toYou } from "./memory";
 import { COMMAND_BANK, PRESENCE_LINES, findMentioned, godStopTyping, parseCommand } from "./presence";
 import { tagify, COINS } from "./topics";
 import { AMBIENT, BY_OBSESSION, CHAIN, DM_OPEN, DM_REPLY, ECHO_OPEN, ECHO_REPLY, FREAK, FREAK_OTHERS, HYPE, LEAD, TO_GOD, type GodIntent } from "./godlines";
@@ -178,17 +179,18 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
     const ob = obsessionOf(targetChar);
     const P = PRESENCE_LINES;
     const roastee = cmd?.kind === "roast" ? findMentioned(s, [cmd.target ?? ""], srv) : undefined;
-    const firstBank = cmd ? COMMAND_BANK[cmd.kind] : !target ? (negish(ob) ? P.addressedNeg : P.addressed) : FREAK[ob];
+    const insult = p.intent === "insult" && !cmd;
+    const firstBank = cmd ? COMMAND_BANK[cmd.kind] : insult ? (negish(ob) ? P.insultedNeg : P.insulted) : !target ? (negish(ob) ? P.addressedNeg : P.addressed) : FREAK[ob];
     const first = say(targetChar, line(s, rng, targetChar, firstBank, slots(x, targetChar, roastee, { target: roastee ? `@${roastee.username}` : cmd?.target ?? "you" }), { keepCaps: true }), { replyTo: god.id, intent: cmd ? `cmd:${cmd.kind}` : "addressed", typingStart: now + rng.range(0.15, 0.3) * SEC, gap: [-1.2 * SEC, -0.8 * SEC] });
     if (cmd?.kind === "meme") first.meme = memeFor(s, rng, targetChar, topic, text);
     if (cmd) {
       (s.godMoments ??= []).push({ t: now, kind: "command", text: `You asked @${targetChar.username} to ${cmd.kind === "hi" ? "say hi" : cmd.kind === "roast" ? `roast ${cmd.target}` : cmd.kind === "defend" ? "defend you" : cmd.kind === "meme" ? "drop a meme" : cmd.kind === "joke" ? "tell a joke" : "do something"}. They did`, link: `lounge:${srv.id}:${ch.id}` });
       if (roastee && roastee.id !== targetChar.id) say(roastee, line(s, rng, roastee, P.cmdRoastBack, slots(x, roastee, targetChar)), { replyTo: first.id, intent: "roasted", gap: [1.5 * SEC, 3 * SEC] });
-    } else if (fanish(ob) && rng.chance(0.6)) say(targetChar, line(s, rng, targetChar, FREAK[ob], slots(x, targetChar)), { intent: "freak", gap: [1.2 * SEC, 3 * SEC] });
+    } else if (!insult && fanish(ob) && rng.chance(0.6)) say(targetChar, line(s, rng, targetChar, FREAK[ob], slots(x, targetChar)), { intent: "freak", gap: [1.2 * SEC, 3 * SEC] });
     // others comment on the exchange
     for (let i = 0, n = rng.int(1, 2); i < n; i++) {
       const w = audience(x, (o2) => (fanish(o2) ? 3 : 1), new Set([targetChar.id]), b.cur);
-      if (w) say(w, line(s, rng, w, P.watchers, slots(x, w, targetChar)), { intent: "watch", gap: [0.6 * SEC, 1.8 * SEC] });
+      if (w) say(w, line(s, rng, w, insult ? P.insultWatch : P.watchers, slots(x, w, targetChar)), { intent: "watch", gap: [0.6 * SEC, 1.8 * SEC] });
     }
     const nOthers = Math.round(rng.range(3, 6) * Math.sqrt(act));
     for (let i = 0; i < nOthers; i++) {
@@ -197,7 +199,18 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
       say(o, line(s, rng, o, FREAK_OTHERS, slots(x, o, targetChar)), { replyTo: rng.chance(0.4) ? first.id : undefined, intent: "noticed", gap: [0.8 * SEC, 3.5 * SEC], typingStart: i < 3 ? now + rng.range(0.8, 2.2) * SEC : undefined });
     }
     targetChar.bond = clamp((targetChar.bond ?? 0) + 15, 0, 100);
-    targetChar.opinion = clamp(targetChar.opinion + (negish(ob) ? 8 : 5), -100, 100);
+    if (insult) {
+      // being dissed by him in public stings for days
+      targetChar.opinion = clamp(targetChar.opinion - 10, -100, 100);
+      adjustRel(targetChar, "god", -35);
+      nudgeMood(targetChar, -0.5);
+      rememberLong(targetChar, { about: "god", text: `god insulted me in front of everyone in #${ch.name}: "${p.quote}"`, t: now, w: 0.95 });
+    } else {
+      targetChar.opinion = clamp(targetChar.opinion + (negish(ob) ? 8 : 5), -100, 100);
+      adjustRel(targetChar, "god", p.intent === "compliment" ? 14 : 6);
+      nudgeMood(targetChar, 0.35);
+      rememberLong(targetChar, { about: "god", text: `god ${target ? "replied to" : "@'d"} me in #${ch.name}: "${p.quote}"`, t: now, w: p.intent === "compliment" ? 0.85 : 0.6 });
+    }
     (targetChar.godContacts ??= []).push({ t: now, kind: "replied", text: p.quote, where: `${srv.name} #${ch.name}` });
     if (targetChar.godContacts.length > 10) targetChar.godContacts.shift();
   }
@@ -226,15 +239,18 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
   const total = Math.round(clamp((9 + srv.bias * 8 + rng.poisson(3)) * act, 6, 30));
   let conflicts = 0, modded = false, drifted = 0;
   for (let i = 0; i < total; i++) {
-    // a real room never fully agrees: if nobody has clashed by the fourth line, someone pushes back on a fan
-    if (i === 3 && conflicts === 0) {
-      const fanLine = [...b.msgs].reverse().find((m) => m.authorId.startsWith("c") && !m.threadOf && fanish(obsessionOf(charById(s, m.authorId))));
-      const A = fanLine && audience(x, (o) => (negish(o) ? 5 : o === "skeptic" ? 3 : o === "indifferent" ? 0.6 : 0.05), new Set([fanLine.authorId]), b.cur);
-      if (fanLine && A && !fanish(obsessionOf(A))) {
+    // a real room never fully agrees: if nobody has clashed by the third line, someone pushes back
+    if (i >= 2 && i <= 6 && conflicts === 0) {
+      const lines = [...b.msgs].reverse().filter((m) => m.authorId.startsWith("c") && !m.threadOf);
+      const fanLine = lines.find((m) => fanish(obsessionOf(charById(s, m.authorId)))) ?? lines[0];
+      const fanB = fanLine && fanish(obsessionOf(charById(s, fanLine.authorId)));
+      // whoever spoke, someone on the other side answers: a skeptic/hater for a fan, a fan for anyone else
+      const A = fanLine && audience(x, (o) => (fanB ? (negish(o) ? 5 : o === "skeptic" ? 3 : o === "indifferent" ? 0.6 : 0.01) : fanish(o) ? 5 : 0.01), new Set([fanLine.authorId]), b.cur);
+      if (fanLine && A && fanish(obsessionOf(A)) !== fanB) {
         const B = charById(s, fanLine.authorId);
-        say(A, line(s, rng, A, negish(obsessionOf(A)) ? CHAIN.haterToFan : CHAIN.skepticToFan, slots(x, A, B)), { replyTo: fanLine.id, intent: "disagree", gap: [0.9 * SEC, 2.4 * SEC] });
+        say(A, line(s, rng, A, !fanB ? CHAIN.fanToHater : negish(obsessionOf(A)) ? CHAIN.haterToFan : CHAIN.skepticToFan, slots(x, A, B)), { replyTo: fanLine.id, intent: "disagree", gap: [0.9 * SEC, 2.4 * SEC] });
         conflicts++;
-        if (rng.chance(0.7)) say(B, line(s, rng, B, CHAIN.fanToHater, slots(x, B, A)), { replyTo: b.msgs[b.msgs.length - 1].id, intent: "disagree", gap: [1 * SEC, 2.6 * SEC] });
+        if (rng.chance(0.7)) say(B, line(s, rng, B, fanB ? CHAIN.fanToHater : CHAIN.haterToFan, slots(x, B, A)), { replyTo: b.msgs[b.msgs.length - 1].id, intent: "disagree", gap: [1 * SEC, 2.6 * SEC] });
         continue;
       }
     }
@@ -365,6 +381,7 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
     const c = charById(s, id);
     c.bond = clamp((c.bond ?? 0) + 1 + n * 0.5, 0, 100);
     c.opinion = clamp(c.opinion + delta * (negish(obsessionOf(c)) ? 0.4 : 1), -100, 100);
+    if (p.intent === "insult" && c !== targetChar) adjustRel(c, "god", -4);
     if (c.core) {
       (c.godContacts ??= []).push({ t: now, kind: "saw", text: p.quote, where: `${srv.name} #${ch.name}` });
       if (c.godContacts.length > 10) c.godContacts.shift();
@@ -419,7 +436,23 @@ function dmReply(s: WorldState, god: Message, p: ParsedGod, now: number) {
   let t = now + (awake ? rng.range(1.5, 4) * SEC : rng.range(15, 60) * SEC);
   const sl = slotsFor(rng, s, c, undefined, { q: p.quote, Q: p.quote.toUpperCase(), kw: p.keywords[0] ?? "that", holding: s.player.holdings[0]?.name ?? "the empire", coin: p.coin ?? "GOD", ch: "dm", server: "DMs", user: c.username, past: pastGodLine(s, rng, god.id).text, pastwhere: "DMs", mem: c.memory[0]?.label ?? "that day", nw: fmtMoney(netWorth(s)), here: "DMs" });
   const out: Message[] = [];
-  const n = rng.int(1, fanish(ob) ? 3 : 2);
+  const P = PRESENCE_LINES;
+  // what they remember comes first: a grudge, being left on read, or something he told them
+  const lastContact = (c.godContacts ?? []).filter((g) => g.kind === "dm").at(-1)?.t ?? 0;
+  const leftOnRead = c.ignored && now - c.ignored < 4 * 86_400_000 && lastContact < c.ignored;
+  const opener = cmd ? undefined : relOf(c, "god") <= -20 ? P.dmCold : leftOnRead ? P.dmLeftOnRead : undefined;
+  if (opener) {
+    out.push(dmMsg(s, god.channelId, c.id, line(s, rng, c, opener, sl), t, Math.max(now + 400, t - rng.range(2, 4) * SEC)));
+    t += rng.range(2, 6) * SEC;
+    if (leftOnRead) adjustRel(c, "god", 4); // he did come back
+  }
+  const facts = c.godFacts ?? [];
+  if (!opener && !cmd && facts.length && now - lastContact > 30 * 60_000 && rng.chance(0.35)) {
+    const fact = toYou(rng.pick(facts.slice(-6)));
+    out.push(dmMsg(s, god.channelId, c.id, line(s, rng, c, P.dmFact, { ...sl, fact }), t, Math.max(now + 400, t - rng.range(2, 4) * SEC)));
+    t += rng.range(2, 6) * SEC;
+  }
+  const n = rng.int(1, fanish(ob) ? 3 : 2) - (out.length ? 1 : 0);
   for (let i = 0; i < n; i++) {
     // one-on-one: drop crowd lines ("everyone shut up he asked...") that only make sense in a server
     const one = (l: string) => !CROWD.test(l);

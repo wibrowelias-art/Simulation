@@ -69,6 +69,29 @@ export interface Character {
   bond?: number; // 0..100 familiarity with @god (grows when he talks to / replies to them)
   godContacts?: GodContact[]; // conversation history with @god
   godFacts?: string[]; // things @god told them (from live chats), remembered later
+  mem?: LongMemory[]; // long-term memories about god, other people and their own life (capped, see memory.ts)
+  rel?: Record<string, number>; // -100..100 personal relationship with "god" and a few key characters
+  mood?: number; // -1..1, drifts back to 0
+  life?: LifeState; // what is going on in their life right now (see life.ts)
+  lifeDone?: string[]; // arcs they already lived through (recent)
+  ignored?: number; // time of their last DM to god that he left on read (already counted)
+}
+
+export interface LongMemory {
+  t: number;
+  about: string; // "god", "self", or a character id
+  text: string;
+  w: number; // 0..1 importance
+  n?: number; // times reinforced
+}
+
+export interface LifeState {
+  arc: string;
+  stage: number; // index into the arc's stages; === stages.length during the epilogue
+  since: number;
+  next: number; // when it moves on
+  vars: Record<string, string>;
+  end?: number; // which ending (epilogue)
 }
 
 export interface MemoryItem {

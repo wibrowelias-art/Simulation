@@ -7,6 +7,7 @@ export type Slots = Record<string, string | (() => string) | undefined>;
  *  {a|b|c}   → random alternative (may nest slots)
  *  {slot}    → slot value (string or thunk); unknown slots are dropped
  *  {?text}   → included with 50% probability
+ *  {?a|b|}   → 50%: one of the alternatives (an empty one means nothing)
  */
 export function expand(tpl: string, slots: Slots, rng: Rng): string {
   let s = tpl;
@@ -15,7 +16,7 @@ export function expand(tpl: string, slots: Slots, rng: Rng): string {
     if (!m) break;
     const body = m[1];
     let rep: string;
-    if (body.startsWith("?")) rep = rng.chance(0.5) ? body.slice(1) : "";
+    if (body.startsWith("?")) rep = rng.chance(0.5) ? (body.includes("|") ? rng.pick(body.slice(1).split("|")) : body.slice(1)) : "";
     else if (body.includes("|")) rep = rng.pick(body.split("|"));
     else {
       const v = slots[body];

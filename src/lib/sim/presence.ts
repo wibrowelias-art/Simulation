@@ -8,6 +8,7 @@ import { charById } from "./world";
 import { clamp, diurnal, nid } from "./engine";
 import { obsessionOf } from "./social";
 import { line } from "./godspeak";
+import { adjustRel, nudgeMood, rememberLong } from "./memory";
 import { slotsFor } from "./generator";
 import type { Slots } from "./grammar";
 
@@ -29,6 +30,12 @@ const B = {
   reactOthersNeg: ["imagine being reacted to by him", "{user} is gonna be insufferable now", "lol {user} is shaking", "a {emoji}. wow. history."],
   addressed: ["omg hi. you said '{q}'? ok yes", "you're talking to ME? about '{q}'?", "yes god? '{q}'? i'm listening", "ok so about '{q}'", "wait you @'d me 😭 '{q}' huh", "hi!! '{q}' is so real"],
   addressedNeg: ["oh. you @'d me. '{q}'? bold.", "'{q}'. ok and?", "why are you pinging me about '{q}'"],
+  insulted: ["wow ok", "what did i do 😭", "that's crazy coming from you", "ok that one hurt ngl", "screenshotting this. unbelievable", "you could've just not replied", "lol ok god", "damn. noted."],
+  insultedNeg: ["and you wonder why people don't like you", "lmao the richest man alive is pressed at me", "say that without your money", "this is why i'm a hater btw"],
+  insultWatch: ["he just violated {user} 💀", "{user} got cooked by god himself", "NOT GOD DISSING {user}", "{user} you good?", "that was personal 😭"],
+  dmCold: ["oh so NOW you wanna talk", "still thinking about what you said tbh", "you were kinda rude the other day", "hm. hi.", "after what you said? ok", "not sure i'm talking to you rn"],
+  dmLeftOnRead: ["oh NOW you text me", "look who remembered i exist", "you left me on read btw", "wow a reply. only took forever", "thought you forgot about me"],
+  dmFact: ["wait didn't you say {fact}?", "btw i remember you said {fact} lol", "you told me {fact}, i don't forget"],
   watchers: ["he's talking to {user} 😭", "{user} got the ping 😭", "god just @'d {user}", "{user} answer him!!", "we're all watching {user}", "{user} don't fumble this"],
   cmdHi: ["HI EVERYONE. god told me to say hi. so. hi 👋", "hi!! 👋 (god made me do it)", "hello chat. hello god. hello world 👋", "hi 👋 i'm doing it, i'm saying hi"],
   cmdJoke: ["ok joke: why did the billionaire bring a ladder to {here}? to reach new followers. i'll see myself out", "joke: god walks into a bar. buys the bar. that's the joke.", "what's god's favorite exercise? running the internet 😂", "why don't jets ever get lost? they always follow the money 💀", "knock knock. who's there. not my rent money"],
@@ -226,6 +233,9 @@ export function reactCascade(s: WorldState, m: Message, emoji: string, now: numb
   c.bond = clamp((c.bond ?? 0) + 8, 0, 100);
   c.opinion = clamp(c.opinion + (negish(o) ? 4 : 3), -100, 100);
   c.memory.push({ topicId: m.topicId ?? "", label: `the time god reacted ${emoji} to me`, t: now, feeling: 0.8 });
+  rememberLong(c, { about: "god", text: `god reacted ${emoji} to my message "${m.text.slice(0, 40)}"`, t: now, w: 0.6 });
+  adjustRel(c, "god", 5);
+  nudgeMood(c, 0.3);
   if (c.memory.length > 12) c.memory.shift();
   (c.godContacts ??= []).push({ t: now, kind: "saw", text: `reacted ${emoji}`, where: srv ? srv.name : "DMs" });
   if (c.godContacts.length > 10) c.godContacts.shift();

@@ -5,6 +5,8 @@ import { obsessionOf } from "@/lib/sim/social";
 import { crewRole } from "@/lib/sim/undernet";
 import type { CastCard, LiveLine, LiveRequest } from "./prompt";
 import { LIMITS, resetBudget, spend, used } from "./budget";
+import { moodWord, relOf, rememberLong, topMemories } from "@/lib/sim/memory";
+import { lifeLabel } from "@/lib/sim/life";
 
 export const LIVE_BUDGET = LIMITS.direct.session; // direct model calls per browser session
 export const PER_MIN = LIMITS.direct.perMin;
@@ -30,9 +32,19 @@ export function persona(c: Character, st: WorldState): LiveRequest["persona"] {
   return {
     name: c.displayName, username: c.username, age: c.age, location: c.location, occupation: c.occupation, bio: c.bio, personality: c.personality,
     voice: c.voice, slang: c.slang, emojis: c.emojis, catchphrase: c.catchphrase, interests: c.interests, stance: obsessionOf(c), opinion: Math.round(c.opinion),
-    bond: Math.round(c.bond ?? 0), memories: c.memory.slice(-6).map((m) => m.label), pastWithGod: (c.godContacts ?? []).slice(-9, -1).map((g) => `${g.text} (${g.where})`),
+    bond: Math.round(c.bond ?? 0), memories: memoryLines(c, st, 6), pastWithGod: (c.godContacts ?? []).slice(-9, -1).map((g) => `${g.text} (${g.where})`),
     godFacts: (c.godFacts ?? []).slice(-12), friends: names(c.friends), rivals: names(c.rivals), crew: !!crewRole(st, c.id),
+    mood: moodWord(c), life: lifeLabel(c), warmth: Math.round(relOf(c, "god")),
   };
+}
+
+/** long-term memories as short lines (about god, other people, their own life), most important first */
+export function memoryLines(c: Character, st: WorldState, n: number): string[] {
+  const now = st.simTime;
+  const who = (id: string) => (id === "god" ? "god" : id === "self" ? "me" : `@${charById(st, id)?.username ?? "someone"}`);
+  const long = topMemories(c, now, n).map((m) => (m.about === "self" || m.about === "god" || m.text.includes("@") ? m.text : `${who(m.about)}: ${m.text}`));
+  const short = c.memory.slice(-3).map((m) => m.label);
+  return [...new Set([...long, ...short])].slice(0, n);
 }
 
 /** the short card used when several characters share one scene prompt */
@@ -41,8 +53,8 @@ export function castCard(c: Character, st: WorldState): CastCard {
   const facts = (c.godFacts ?? []).slice(-2).map((f) => `god told them: ${f}`);
   return {
     username: c.username, name: c.displayName, age: c.age, occupation: c.occupation, voice: c.voice, slang: c.slang.slice(0, 4), emojis: c.emojis.slice(0, 3),
-    stance: obsessionOf(c), opinion: Math.round(c.opinion), memories: [...facts, ...c.memory.slice(-2).map((m) => m.label)].slice(0, 4),
-    friends: names(c.friends), rivals: names(c.rivals), crew: !!crewRole(st, c.id),
+    stance: obsessionOf(c), opinion: Math.round(c.opinion + relOf(c, "god") * 0.8), memories: [...facts, ...memoryLines(c, st, 3)].slice(0, 4),
+    friends: names(c.friends), rivals: names(c.rivals), crew: !!crewRole(st, c.id), mood: moodWord(c), life: lifeLabel(c),
   };
 }
 
@@ -132,6 +144,7 @@ export async function liveReply(s: WorldState, god: Message, fresh: Message[], h
     return "fallback";
   }
   if (remember && !(c.godFacts ??= []).includes(remember)) { c.godFacts.push(remember); if (c.godFacts.length > 20) c.godFacts.shift(); }
+  if (remember) rememberLong(c, { about: "god", text: remember, t: at, w: 0.9 });
   const old = lead.text;
   const F = Math.max(T0, at + 250);
   lead.text = lines[0];

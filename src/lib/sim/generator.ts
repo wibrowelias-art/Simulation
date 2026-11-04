@@ -7,6 +7,7 @@ import { CAT_OPEN, CHIRP_GOD, CHIRP_LIFE, CMP, GOD_OPEN, HEADLINES, PERSONAL, PO
 import { EMOJI_HYPE, EMOJI_LAUGH, EMOJI_SHADE } from "./data";
 import { actionDef, type ActionKind } from "./topics";
 import { ambientLine } from "./godspeak";
+import { lifeLine } from "./life";
 
 export type Intent =
   | "open" | "personal" | "inside" | "agree" | "disagreeFan" | "disagreeHater" | "disagreeNeutral" | "joke" | "question" | "answer"
@@ -36,7 +37,7 @@ export interface ArticleCtx { rng: Rng; state: WorldState; outlet: Outlet; topic
  */
 export interface ContentGenerator {
   id: string;
-  chat(ctx: ChatCtx): { text: string; typoWord?: string; clean?: string };
+  chat(ctx: ChatCtx): { text: string; typoWord?: string; clean?: string; life?: boolean };
   /** optional: rewrite a reaction line to @god (an LLM could implement this); must stay deterministic for a given rng */
   react?(ctx: { rng: Rng; state: WorldState; speaker: Character; draft: string; godText: string }): string;
   post(ctx: PostCtx): { text: string; title?: string };
@@ -89,7 +90,13 @@ export const TemplateGenerator: ContentGenerator = {
         if (!topic.facts.action && CAT_OPEN[topic.category] && rng.chance(0.75)) tpl = (() => { const base = rng.pick(CAT_OPEN[topic.category]); return rng.chance(0.55) ? `${base}${/[?!]$/.test(base) ? " " : rng.pick([". ", ", ", " "])}${rng.pick(STANCE_TAIL[c.stance])}` : base; })();
         else tpl = CAT_OPEN[topic.category] && rng.chance(0.35) ? rng.pick(CAT_OPEN[topic.category]) : rng.pick(GOD_OPEN[c.stance]);
         break;
-      case "personal": tpl = rng.pick(PERSONAL); break;
+      case "personal": {
+        // people mostly talk about what's actually going on in their life right now
+        const ll = c.life && rng.chance(0.65) ? lifeLine(rng, c) : undefined;
+        if (ll) return { ...styleText(rng, c, ll, { short: false }), life: true };
+        tpl = rng.pick(PERSONAL);
+        break;
+      }
       case "ambient": return styleText(rng, c, ambientLine(ctx.state, rng, c), { short: true });
       case "inside": tpl = rng.pick([`{?remember }${rng.pick(server.insideJokes)}{? lmao| 😭| lol|}`, `not ${rng.pick(server.insideJokes)} again`, `this is giving ${rng.pick(server.insideJokes)}`]); break;
       case "fix": tpl = `*${ctx.typoWord ?? "that"}`; break;

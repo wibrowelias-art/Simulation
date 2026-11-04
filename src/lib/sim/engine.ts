@@ -13,6 +13,8 @@ import { ambientDm, godSpeak, handleBus } from "./godspeak";
 import { undernetBus, undernetOnAction, undernetTick, type EngineHooks } from "./undernet";
 import { editReact, pinReact, reactCascade, voiceTick } from "./presence";
 import { makeMeme, MEME_LINES, type MemeSpec } from "./memes";
+import { lifeTick } from "./life";
+import { adjustRel, easeDay, nudgeMood, rememberLong, relOf } from "./memory";
 
 export const BUCKET = 10_000;
 const MIN = 60_000, HOUR = 3_600_000, DAY = 86_400_000;
@@ -143,7 +145,7 @@ export function rememberText(s: WorldState, t: string) {
   if (s.recentTexts.length > 600) s.recentTexts.splice(0, s.recentTexts.length - 600);
 }
 
-function chatText(s: WorldState, rng: Rng, c: Character, intent: Intent, srv: Server, ch: Channel, t: number, topic?: Topic, target?: Character, typoWord?: string): { text: string; typoWord?: string; clean?: string } {
+function chatText(s: WorldState, rng: Rng, c: Character, intent: Intent, srv: Server, ch: Channel, t: number, topic?: Topic, target?: Character, typoWord?: string): { text: string; typoWord?: string; clean?: string; life?: boolean } {
   const gen = getGenerator();
   let out = gen.chat({ rng, state: s, speaker: c, intent, topic, target, server: srv, channel: ch, t, typoWord });
   for (let i = 0; i < 5 && out.text.length > 14 && seenText(s, out.clean ?? out.text); i++) out = gen.chat({ rng, state: s, speaker: c, intent, topic, target, server: srv, channel: ch, t, typoWord });
@@ -165,8 +167,19 @@ export function runEpisode(s: WorldState, rng: Rng, srv: Server, ch: Channel, t:
     const r = chatText(s, rng, c, intent, srv, ch, cur, topic, target, pendingTypo?.word);
     const m: Message = {
       id: nid(s, "m"), episodeId: epId, serverId: srv.id, channelId: ch.id, authorId: c.id, text: r.text, t: Math.round(cur), topicId: topic?.id, replyTo,
-      reactions: reactionsFor(s, rng, srv, c, intent, heat), kind: intent === "mod" ? "system" : "chat", intent, score: 0,
+      reactions: reactionsFor(s, rng, srv, c, intent, heat), kind: intent === "mod" ? "system" : "chat", intent: r.life ? "life" : intent, score: 0,
     };
+    // relationships shift with every exchange; a feud that boils over gets remembered
+    if (target && target.id !== c.id) {
+      const d = intent.startsWith("disagree") ? -3 : intent === "backup" || intent === "agree" ? 1.5 : 0;
+      if (d) {
+        const before = relOf(c, target.id);
+        adjustRel(c, target.id, d);
+        adjustRel(target, c.id, d * 0.6);
+        if (before > -40 && relOf(c, target.id) <= -40) rememberLong(c, { about: target.id, text: `@${target.username} and i keep fighting${topic ? ` about ${topic.label}` : ""}`, t: cur, w: 0.5 });
+        if (before < 40 && relOf(c, target.id) >= 40) rememberLong(c, { about: target.id, text: `@${target.username} always has my back`, t: cur, w: 0.45 });
+      }
+    }
     if (/@god\b/i.test(r.text)) m.mentionsGod = true;
     if (r.clean && r.clean !== r.text && rng.chance(0.45)) { m.editText = r.clean; m.editedAt = Math.round(cur + rng.range(4, 20) * 1000); }
     m.score = (c.tier === "power" ? 2 : c.tier === "regular" ? 1 : 0.5) + m.reactions.reduce((a, x) => a + x.count, 0) + (c.influencer ? 3 : 0);
@@ -539,6 +552,7 @@ export function processBucket(s: WorldState, b: number) {
     for (const e of s.events) if (!e.resolved && e.expiresAt <= t0) e.resolved = { choiceId: "expired", outcome: "You didn't respond. The internet moved on.", t: e.expiresAt };
     drift(s, rng, 5 * MIN);
   }
+  if (b % 360 === 0) hourly(s, t0);
   if (b % 90 === 0) s.player.netWorthHistory.push({ t: t0, v: Math.round(netWorth(s)) });
   if (b % 180 === 0) prune(s);
 
@@ -555,6 +569,33 @@ export function processBucket(s: WorldState, b: number) {
   s.simTime = t1;
 }
 
+/** once an hour of sim time: lives move on, grudges ease, unanswered DMs sting */
+function hourly(s: WorldState, t: number) {
+  lifeTick(s, t);
+  for (const c of s.characters) if (c.rel || c.mood) easeDay(c, 1 / 24);
+  leftOnRead(s, t);
+}
+
+/** a character DMed god and he never answered (6h+): they remember, and it shows */
+function leftOnRead(s: WorldState, t: number) {
+  const last = new Map<string, Message>();
+  for (let i = s.messages.length - 1; i >= 0; i--) {
+    const m = s.messages[i];
+    if (t - m.t > 3 * DAY) break; // delivered in time order
+    if (m.serverId !== "dm" || !m.channelId.endsWith(":god") || last.has(m.channelId)) continue;
+    last.set(m.channelId, m);
+  }
+  for (const m of last.values()) {
+    if (!m.authorId.startsWith("c") || t - m.t < 6 * HOUR || t - m.t > 3 * DAY) continue;
+    const c = charById(s, m.authorId);
+    if (!c || (c.ignored ?? 0) >= m.t) continue;
+    c.ignored = m.t;
+    rememberLong(c, { about: "god", text: `god left me on read after i DMed him "${m.text.slice(0, 50)}"`, t, w: 0.55 });
+    adjustRel(c, "god", -8);
+    nudgeMood(c, -0.15);
+  }
+}
+
 export interface SimProgress { done: number; total: number }
 
 /** Advance the world to `to`. Long gaps are compressed to the last MAX_FULL_SIM of full simulation. */
@@ -567,6 +608,8 @@ export function simulate(s: WorldState, to: number, opts: { maxBuckets?: number 
     const dt = (skipTo - b) * BUCKET;
     drift(s, null, dt);
     decay(s, dt);
+    // lives keep moving while nobody watches (cheap: one pass per skipped hour)
+    for (let h = Math.ceil(s.simTime / HOUR) * HOUR; h < skipTo * BUCKET; h += HOUR) hourly(s, h);
     s.simTime = skipTo * BUCKET;
     b = skipTo;
     compressed = true;

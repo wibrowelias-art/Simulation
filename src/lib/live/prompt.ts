@@ -23,6 +23,9 @@ export interface LivePersona {
   friends: string[]; // usernames
   rivals: string[]; // usernames
   crew?: boolean; // gh0st's crew: story flavor only
+  mood?: string; // "in a good mood", ...
+  life?: string; // what's going on in their life right now
+  warmth?: number; // -100..100 personal feelings toward god right now (grudges, soft spots)
 }
 
 export interface LiveLine { who: string; text: string }
@@ -53,8 +56,9 @@ export function sanitize(b: unknown): LiveRequest | undefined {
       name: cut(p.name, 40), username, age: Math.max(13, Math.min(90, Number(p.age) || 24)), location: cut(p.location, 60), occupation: cut(p.occupation, 60),
       bio: cut(p.bio, 200), personality: arr(p.personality, 6, 24), voice: cut(p.voice, 20), slang: arr(p.slang, 10, 16), emojis: arr(p.emojis, 6, 8),
       catchphrase: cut(p.catchphrase, 80), interests: arr(p.interests, 6, 24), stance: cut(p.stance, 20), opinion: Math.max(-100, Math.min(100, Number(p.opinion) || 0)),
-      bond: Math.max(0, Math.min(100, Number(p.bond) || 0)), memories: arr(p.memories, 6, 80), pastWithGod: arr(p.pastWithGod, 8, 160),
+      bond: Math.max(0, Math.min(100, Number(p.bond) || 0)), memories: arr(p.memories, 6, 120), pastWithGod: arr(p.pastWithGod, 8, 160),
       godFacts: arr(p.godFacts, 12, 120), friends: arr(p.friends, 4, 40), rivals: arr(p.rivals, 4, 40), crew: !!p.crew,
+      mood: cut(p.mood, 40) || undefined, life: cut(p.life, 90) || undefined, warmth: Math.max(-100, Math.min(100, Math.round(Number(p.warmth) || 0))),
     },
     place: { dm: !!pl.dm, server: cut(pl.server, 40), channel: cut(pl.channel, 40) },
     history: (Array.isArray(r.history) ? r.history : []).slice(-30).map((x) => ({ who: cut((x as LiveLine)?.who, 40), text: cut((x as LiveLine)?.text, 300) })).filter((x) => x.who && x.text),
@@ -91,7 +95,10 @@ export function instructions(r: LiveRequest): string {
     p.friends.length || p.rivals.length ? `People in the chat: friends ${p.friends.map((x) => "@" + x).join(", ") || "none"}; you don't get along with ${p.rivals.map((x) => "@" + x).join(", ") || "nobody"}.` : "",
     `"god" (@god) is the richest, most famous person in this world. Everyone knows him. ${feeling(p.opinion)} (opinion ${p.opinion}/100). How well you know him: ${p.bond}/100. ${glaze}`,
     p.godFacts.length ? `Things god told you about himself (remember these and use them when relevant): ${p.godFacts.join("; ")}.` : "",
-    p.memories.length ? `Things you remember happening: ${p.memories.join("; ")}.` : "",
+    p.memories.length ? `Things you remember (bring them up naturally when it fits, e.g. "you said your dog was called biscuit"): ${p.memories.join("; ")}.` : "",
+    p.life ? `What's going on in your life right now: ${p.life}. It's on your mind and you mention it sometimes.` : "",
+    p.mood ? `Your mood today: ${p.mood}.` : "",
+    (p.warmth ?? 0) <= -20 ? `You're still annoyed with god personally (${p.warmth}/100) because of how he treated you. Be colder and shorter with him than usual; you don't let it go easily.` : (p.warmth ?? 0) >= 25 ? "You've been feeling warm toward god lately because of how he treated you." : "",
     p.pastWithGod.length ? `Things god said to you before: ${p.pastWithGod.map((x) => `"${x}"`).join("; ")}.` : "",
     `Typing style: ${VOICE[p.voice] ?? VOICE.lowercase}. Slang you use: ${p.slang.join(", ") || "lol"}. Emojis you like: ${p.emojis.join(" ") || "😭"}. Don't overdo slang or emojis.`,
     "Talk like a normal person texting in a group chat or DM: short, casual, sometimes a typo, sometimes just a reaction. React to what was actually just said, not generic hype. Ask follow-up questions sometimes. Have opinions and sometimes disagree. Give real (casual) advice if asked. Remember everything in the conversation so far and answer questions about it correctly. Never sound like a customer-service assistant: no 'Great question', no offering help, no lists. Do not repeat earlier lines. No hashtags, no name prefix, no narration or actions in asterisks.",

@@ -3,7 +3,9 @@ import { diurnal } from "./engine";
 
 /** Obsession level is derived from stance + current opinion, so it evolves as opinions move. */
 export function obsessionOf(c: Character): Obsession {
-  const o = c.opinion;
+  // a personal grudge (or soft spot) colors how they act toward him, on top of their public opinion
+  const o = c.opinion + (c.rel?.god ?? 0) * 0.8;
+  if (c.stance === "worshipper" && (c.rel?.god ?? 0) <= -25) return "skeptic"; // even the biggest fan sulks for a while
   if (c.stance === "worshipper" || o >= 72) return "obsessed";
   if (c.stance === "hater" || o <= -60) return "hater";
   if (c.stance === "jealous") return o > 20 ? "supporter" : "rival";

@@ -5,7 +5,7 @@ import { makeCharacter } from "./characters";
 import { CELEB_FIELDS } from "./data";
 import { OUTLETS, SERVER_DEFS } from "./servers";
 
-export const WORLD_VERSION = 7;
+export const WORLD_VERSION = 8;
 export const CORE_CAST = 36;
 export const CHARACTER_COUNT = 380;
 
@@ -96,6 +96,9 @@ export function migrateWorld(w: WorldState): WorldState | undefined {
   // v3, v4 and early v5 saves may predate The Undernet
   ensureUndernet(w);
   // v7: messages may carry an optional `ai` flag (live lines); nothing to convert
+  // v8: characters gain long-term memory, relationships, mood and life arcs (all optional, filled in as the world
+  // runs). Facts god told them in live chats carry over into long-term memory so nothing is forgotten.
+  if (w.version < 8) for (const c of w.characters) for (const f of c.godFacts ?? []) ((c.mem ??= []).some((m) => m.text === f) || c.mem.push({ about: "god", text: f, t: w.simTime, w: 0.9 }));
   w.version = WORLD_VERSION;
   return w;
 }
