@@ -4,7 +4,8 @@ Single-player fictional internet where the player (@god) is the most famous pers
 
 ## Commands
 - `npm ci`, `npm run dev`, `npm test` (vitest), `npm run typecheck`, `npm run lint`, `npm run build && npm start` (port 3100)
-- QA (needs a running server + Chrome; set `BASE=`): `node qa/smoke.mjs`, `qa/acceptance.mjs`, `qa/interact.mjs`, `qa/live.mjs`, `qa/ai.mjs`, `qa/perf.mjs`, `qa/rail.mjs` (currently hangs, fix it)
+- QA (needs a running server + Chrome; set `BASE=`, `CHROME=` to override the browser): `node qa/smoke.mjs`, `qa/acceptance.mjs` (`VIDEO=1` to record), `qa/interact.mjs`, `qa/live.mjs`, `qa/ai.mjs`, `qa/perf.mjs`, `qa/rail.mjs` (old-save migration, 60 s cap), `qa/targets.mjs` (44 px tap targets at 390x844)
+- Perf budgets: `BENCH=1 npx vitest run` (fails when a budget in `bench/bench.test.ts` is exceeded)
 - Deploy: `vercel deploy --prod`; secret: `vercel env add GEMINI_API_KEY production`
 - Debug URLs: `/?demo`, `/?seed=x`, `/?away=6h`
 
@@ -13,7 +14,8 @@ Single-player fictional internet where the player (@god) is the most famous pers
 - Engine (10 s seeded slots, `processBucket`, `simulate`, `catchUp`, `ripple`, god actions): `src/lib/sim/engine.ts`.
 - Reactions to god: `godspeak.ts`, `godlines.ts`, `presence.ts`. Characters/voice: `characters.ts`, `generator.ts`, `style.ts`, `templates.ts`, `social.ts`. Story: `undernet.ts`; guard: `flavor.ts`.
 - Store, tick loop, saves, BroadcastChannel single-runner: `src/components/store.ts`. UI: `src/components/views/*` (Lounge.tsx is the chat).
-- Live AI: `src/lib/live/client.ts` (budgets, persona, history, pickLead), `src/lib/live/prompt.ts`.
+- Live AI (all an overlay; never touches the seeded RNG): `src/lib/live/budget.ts` (direct / moment / ambient call lanes, idle + hidden pause), `client.ts` (direct replies, persona + cast cards), `scene.ts` (group scenes: ambient chatter in the focused channel, the crowd after god speaks, presence moments), `prompt.ts` (requests, prompts, parsing + validation, voice normaliser).
+- Memory and lives: `src/lib/sim/memory.ts` (capped long-term memories, relationships, mood), `src/lib/sim/life.ts` (life arcs over sim days).
 - Research on real chat behaviour: `docs/research.md`.
 
 ## Rules
