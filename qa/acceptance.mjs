@@ -6,10 +6,11 @@ const BASE = process.env.BASE ?? "http://localhost:3100";
 const PREFIX = process.env.PREFIX ?? "local";
 const OUT = new URL("../screenshots/", import.meta.url).pathname;
 const VID = `${OUT}video-tmp/`;
-fs.mkdirSync(VID, { recursive: true });
+const VIDEO = process.env.VIDEO === "1"; // needs Playwright's ffmpeg; off by default
+if (VIDEO) fs.mkdirSync(VID, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await chromium.launch({ executablePath, args: ["--no-sandbox"] });
-const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, recordVideo: { dir: VID, size: { width: 390, height: 844 } } });
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, ...(VIDEO ? { recordVideo: { dir: VID, size: { width: 390, height: 844 } } } : {}) });
 const page = await ctx.newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
@@ -74,11 +75,12 @@ while (Date.now() - t0 < 300000) {
   if (echoes.length) { tEcho = Date.now() - t0; break; }
 }
 await page.screenshot({ path: `${OUT}${PREFIX}-godspeaks-4.png` });
-const video = page.video();
+const video = VIDEO ? page.video() : null;
 await ctx.close();
-const vp = await video.path();
-fs.renameSync(vp, `${OUT}${PREFIX}-godspeaks.webm`);
-fs.rmSync(VID, { recursive: true, force: true });
+if (video) {
+  fs.renameSync(await video.path(), `${OUT}${PREFIX}-godspeaks.webm`);
+  fs.rmSync(VID, { recursive: true, force: true });
+}
 await browser.close();
 
 const report = { base: BASE, firstSeenMs: first, newMessagesIn15s: freshCount, godReactionsAt15s: last.godRx, badge: { before: badgeBefore, after: last.more + last.lounge }, echoAfterMs: tEcho, echoes: echoes.slice(0, 5), errors };

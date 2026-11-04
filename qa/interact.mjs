@@ -54,7 +54,7 @@ await box.fill(""); await wait(400);
 const target = (await rows()).reverse().find((r) => r.a && r.a.startsWith("c") && !r.meme);
 before = new Set((await rows()).map((r) => r.id));
 const el = page.locator(`[data-mid="${target.id}"]`);
-await el.scrollIntoViewIfNeeded(); await el.click(); await wait(300);
+await el.scrollIntoViewIfNeeded(); await el.click(); await wait(300); await shot("react-target");
 await page.getByRole("button", { name: "React 🔥" }).first().click();
 const reactedAt = ms();
 let authorReply;

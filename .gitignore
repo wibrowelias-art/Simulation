@@ -8,6 +8,7 @@ screenshots/video-tmp
 PROGRESS.json
 .env*
 !.env.example
-screenshots/*-undernet-*
-screenshots/qa-*
-screenshots/run-*
+screenshots/*
+!screenshots/mobile-dashboard.png
+!screenshots/mobile-lounge.png
+!screenshots/live-convo-1.png
