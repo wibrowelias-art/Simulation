@@ -1,8 +1,9 @@
 // Perf probe: catch-up duration + main-thread busy time per second while idle on each screen.
 import { chromium } from "playwright-core";
+import { executablePath } from "./_browser.mjs";
 const BASE = process.env.BASE ?? "http://localhost:3100";
 const THROTTLE = Number(process.env.THROTTLE ?? 4);
-const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const b = await chromium.launch({ executablePath, args: ["--no-sandbox"] });
 const out = {};
 async function fresh(away) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });

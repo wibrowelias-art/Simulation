@@ -1,7 +1,8 @@
 import { chromium } from "playwright-core";
+import { executablePath } from "../qa/_browser.mjs";
 const BASE = process.env.BASE ?? "http://localhost:3100";
 const OUT = new URL("../screenshots/", import.meta.url).pathname;
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath, args: ["--no-sandbox"] });
 const errors = [];
 const PREFIX = process.env.PREFIX; // e.g. "live" to name files live-*
 const ONLY = process.env.ONLY; // "mobile" or "desktop"

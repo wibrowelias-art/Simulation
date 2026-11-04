@@ -1,5 +1,6 @@
 // Acceptance: @god speaks in GOD HQ #general on a phone viewport and the world reacts.
 import { chromium } from "playwright-core";
+import { executablePath } from "./_browser.mjs";
 import fs from "node:fs";
 const BASE = process.env.BASE ?? "http://localhost:3100";
 const PREFIX = process.env.PREFIX ?? "local";
@@ -7,7 +8,7 @@ const OUT = new URL("../screenshots/", import.meta.url).pathname;
 const VID = `${OUT}video-tmp/`;
 fs.mkdirSync(VID, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath, args: ["--no-sandbox"] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, recordVideo: { dir: VID, size: { width: 390, height: 844 } } });
 const page = await ctx.newPage();
 const errors = [];

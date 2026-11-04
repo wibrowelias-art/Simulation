@@ -31,16 +31,26 @@ export function indexedDbKV(dbName = "god-sim", storeName = "kv", idb: IDBFactor
         req.onupgradeneeded = () => {
           if (!req.result.objectStoreNames.contains(storeName)) req.result.createObjectStore(storeName);
         };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          const db = req.result;
+          // another page (a newer build, or a tool rewriting the save) wants the database: let go instead of
+          // blocking it; the next call simply reopens
+          db.onversionchange = () => { db.close(); dbp = null; };
+          db.onclose = () => { dbp = null; };
+          resolve(db);
+        };
+        req.onerror = () => { dbp = null; reject(req.error); };
+        req.onblocked = () => { /* an older connection is closing; onsuccess follows */ };
       });
     }
     return dbp;
   };
   const tx = async <T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest | void): Promise<T> => {
-    const db = await open();
+    let db = await open();
+    let t: IDBTransaction;
+    try { t = db.transaction(storeName, mode); }
+    catch { dbp = null; db = await open(); t = db.transaction(storeName, mode); } // connection was closed under us
     return new Promise<T>((resolve, reject) => {
-      const t = db.transaction(storeName, mode);
       const store = t.objectStore(storeName);
       const req = fn(store);
       t.oncomplete = () => resolve((req ? req.result : undefined) as T);

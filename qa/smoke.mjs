@@ -1,9 +1,10 @@
 // Clicks through every interactive surface on phone + desktop; fails on page errors, horizontal overflow or dead controls.
 import { chromium } from "playwright-core";
+import { executablePath } from "./_browser.mjs";
 const BASE = process.env.BASE ?? "http://localhost:3100";
 const OUT = new URL("../screenshots/qa-", import.meta.url).pathname;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const b = await chromium.launch({ executablePath, args: ["--no-sandbox"] });
 const problems = [];
 for (const [label, vp] of [["mobile", { width: 390, height: 844 }], ["desktop", { width: 1440, height: 900 }]]) {
   const ctx = await b.newContext({ viewport: vp, hasTouch: label === "mobile" });

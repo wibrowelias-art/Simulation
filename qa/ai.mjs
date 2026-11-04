@@ -1,11 +1,12 @@
 // Quick live check: DM memory (3 turns), "sup guys" in #general, and The Undernet in the server rail.
 import { chromium } from "playwright-core";
+import { executablePath } from "./_browser.mjs";
 import fs from "node:fs";
 const BASE = process.env.BASE ?? "http://localhost:3100";
 const P = process.env.PREFIX ?? "local";
 const OUT = new URL("../screenshots/", import.meta.url).pathname;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath, args: ["--no-sandbox"] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 const page = await ctx.newPage();
 const errors = [], api = [];
