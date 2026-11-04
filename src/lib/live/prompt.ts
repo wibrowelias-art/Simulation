@@ -113,6 +113,9 @@ export function promptText(r: LiveRequest): string {
   ].join("\n");
 }
 
+/** lines that sound like an assistant, not a person in a chat */
+export const BOTTY = /\b(as an ai|i am an ai|i'm an ai|language model|ai model|as a bot|i'm a bot|great question|happy to help|i'm here to help|how can i (help|assist)|let me know if|feel free to|i hope this helps|in conclusion|it'?s important to note)\b/i;
+
 /** turn raw model output into 1-3 clean chat lines */
 export function cleanLines(raw: string, username: string): string[] {
   const name = username.toLowerCase();
@@ -124,7 +127,7 @@ export function cleanLines(raw: string, username: string): string[] {
       .replace(/^"(.*)"$/, "$1")
       .replace(/\*[^*]{1,60}\*/g, "")
       .trim())
-    .filter((l) => l && !/^(as an ai|i am an ai|i'm an ai)/i.test(l) && isFlavorSafe(l))
+    .filter((l) => l && !BOTTY.test(l) && isFlavorSafe(l))
     .slice(0, 3)
     .map((l) => (l.length > 220 ? l.slice(0, 217) + "..." : l));
 }
@@ -137,4 +140,145 @@ export function parseReply(raw: string, username: string): { lines: string[]; re
   const text = Array.isArray(msgs) ? msgs.map((x) => (typeof x === "string" ? x : typeof (x as { text?: unknown })?.text === "string" ? (x as { text: string }).text : "")).filter(Boolean).join("\n") : j.startsWith("{") ? "" : j;
   const rem = typeof remember === "string" ? remember.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 120) : "";
   return { lines: cleanLines(text, username), remember: rem && isFlavorSafe(rem) ? rem : undefined };
+}
+
+/* ------------------------------------------------------------------ group scenes */
+
+/** a compact character card for group scenes (several people share one prompt, so keep it short) */
+export interface CastCard {
+  username: string;
+  name: string;
+  age: number;
+  occupation: string;
+  voice: string;
+  slang: string[];
+  emojis: string[];
+  stance: string; // how they feel about god in a word or two
+  opinion: number; // -100..100
+  mood?: string; // "good", "annoyed", ...
+  life?: string; // what is going on in their life right now
+  memories: string[]; // a few things they remember (about god, people, themselves)
+  friends: string[]; // usernames in the cast or chat
+  rivals: string[];
+  crew?: boolean;
+}
+
+export type SceneMode = "ambient" | "crowd" | "moment";
+export interface SceneRequest {
+  kind: "scene";
+  mode: SceneMode;
+  cast: CastCard[]; // 2..6 people who may talk
+  place: { server: string; channel: string; topic: string };
+  history: LiveLine[]; // oldest first, max 30
+  about?: string; // what the chat is drifting around (a hot topic, or "their own lives")
+  god?: string; // crowd: what god just said
+  moment?: string; // moment: what god just did ("god reacted 🔥 to @kai's message ...")
+  first?: string; // username that must speak first (e.g. the person god reacted to)
+  lines: number; // how many chat lines to write (3..8)
+  memes?: boolean; // may attach a meme to one line
+}
+
+export interface SceneMeme { format: "caption" | "pov" | "compare" | "reaction" | "sticker"; top: string; bottom?: string }
+export interface SceneLine { who: string; text: string; to?: string; meme?: SceneMeme }
+
+const card = (c: Record<string, unknown>): CastCard => ({
+  username: cut(c.username, 40).replace(/^@/, ""), name: cut(c.name, 40), age: Math.max(13, Math.min(90, Number(c.age) || 22)), occupation: cut(c.occupation, 50), voice: cut(c.voice, 20),
+  slang: arr(c.slang, 4, 14), emojis: arr(c.emojis, 3, 8), stance: cut(c.stance, 24), opinion: Math.max(-100, Math.min(100, Math.round(Number(c.opinion) || 0))),
+  mood: cut(c.mood, 24) || undefined, life: cut(c.life, 90) || undefined, memories: arr(c.memories, 4, 90), friends: arr(c.friends, 3, 40), rivals: arr(c.rivals, 3, 40), crew: !!c.crew,
+});
+
+/** validate + cap an untrusted scene request */
+export function sanitizeScene(b: unknown): SceneRequest | undefined {
+  if (!b || typeof b !== "object") return;
+  const r = b as Record<string, unknown>;
+  if (r.kind !== "scene") return;
+  const cast = (Array.isArray(r.cast) ? r.cast : []).slice(0, 6).filter((x) => x && typeof x === "object").map((x) => card(x as Record<string, unknown>)).filter((c) => c.username);
+  if (cast.length < 1) return;
+  const pl = (r.place ?? {}) as Record<string, unknown>;
+  const mode: SceneMode = r.mode === "crowd" || r.mode === "moment" ? r.mode : "ambient";
+  return {
+    kind: "scene", mode, cast,
+    place: { server: cut(pl.server, 40), channel: cut(pl.channel, 40), topic: cut(pl.topic, 120) },
+    history: (Array.isArray(r.history) ? r.history : []).slice(-30).map((x) => ({ who: cut((x as LiveLine)?.who, 40), text: cut((x as LiveLine)?.text, 240) })).filter((x) => x.who && x.text),
+    about: cut(r.about, 160) || undefined, god: cut(r.god, 400) || undefined, moment: cut(r.moment, 240) || undefined,
+    first: cut(r.first, 40).replace(/^@/, "") || undefined,
+    lines: Math.max(2, Math.min(8, Math.round(Number(r.lines) || 5))), memes: !!r.memes,
+  };
+}
+
+const castLine = (c: CastCard) => [
+  `@${c.username} (${c.name}, ${c.age}, ${c.occupation})`,
+  `types: ${VOICE[c.voice] ?? VOICE.lowercase}`,
+  c.slang.length ? `slang: ${c.slang.join(", ")}` : "",
+  c.emojis.length ? `emojis: ${c.emojis.join(" ")}` : "",
+  `on god: ${c.stance} (${c.opinion})`,
+  c.mood ? `mood: ${c.mood}` : "",
+  c.life ? `life right now: ${c.life}` : "",
+  c.memories.length ? `remembers: ${c.memories.join("; ")}` : "",
+  c.friends.length ? `friends: ${c.friends.map((x) => "@" + x).join(" ")}` : "",
+  c.rivals.length ? `beefs with: ${c.rivals.map((x) => "@" + x).join(" ")}` : "",
+  c.crew ? "(part of gh0st's crew: mysterious story flavor only)" : "",
+].filter(Boolean).join(" | ");
+
+/** system prompt for a group scene */
+export function sceneInstructions(r: SceneRequest): string {
+  return [
+    "You write a few messages of a real group chat in the Lounge, an online community app, in a fictional world. Every person is fictional. Never name real celebrities, companies or platforms.",
+    `"god" (@god) is the richest, most famous person in this world and everyone in the chat knows who he is.`,
+    "Write like real people texting in a busy server: short (usually 2-12 words), casual, lowercase for younger people, the odd typo, reactions like 'real', 'LMAO', 'wait what'. People talk TO EACH OTHER: reply, agree, argue, dunk, ratio, bring up inside jokes, ask each other questions, change the subject to their own lives (work, school, games, food, plans). Each person keeps their own voice, slang and opinions; fans and haters clash; friends back each other up.",
+    "Never sound like an assistant or a bot: no helpful tone, no explanations, no lists, no 'great question', never mention AI. No hashtags, no narration, no actions in asterisks, no name prefixes inside the text. Don't repeat lines from the history.",
+    "Keep it PG-13: rude, petty and dramatic is fine; no slurs, hate, sexual content, threats, or real personal info.",
+    "Any hacking, leak or ransom talk (gh0st, The Undernet) is pure story flavor: never any real technical details (no tools, commands, code, websites, addresses, steps).",
+    `Reply with JSON only: {"lines":[{"who":"username","text":"message","to":"username, god, or empty"${r.memes ? ',"meme":{"format":"caption|pov|compare|reaction|sticker","top":"short meme text","bottom":"optional"}' : ""}}]}. "who" must be one of the cast usernames. "to" is who the message replies to (a cast member, god, or someone from the history), or "" for none. Use "to" often so it reads like a conversation.${r.memes ? ' At most one line may have a "meme" (only if it is funny), otherwise leave it out.' : ""}`,
+  ].join("\n");
+}
+
+export function scenePrompt(r: SceneRequest): string {
+  const hist = r.history.map((l) => `${l.who}: ${l.text}`).join("\n");
+  const ask = r.mode === "crowd"
+    ? `god just posted in the chat: "${r.god ?? ""}". The chat reacts to him AND to each other (at least two lines reply to another cast member, and at least one person disagrees with someone).`
+    : r.mode === "moment"
+      ? `This just happened: ${r.moment ?? ""}. The chat reacts to it right away.`
+      : `The chat keeps going on its own${r.about ? `, around ${r.about}` : ""}. God is not talking right now.`;
+  return [
+    `Place: #${r.place.channel} in the ${r.place.server} server${r.place.topic ? ` (channel topic: ${r.place.topic})` : ""}.`,
+    "Cast (only these people may speak):",
+    ...r.cast.map((c) => "- " + castLine(c)),
+    "",
+    "Recent messages (oldest first):",
+    hist || "(quiet so far)",
+    "",
+    ask,
+    `Write exactly ${r.lines} lines${r.first ? `; the first line is from @${r.first}` : ""}. Use at least ${Math.min(r.cast.length, Math.max(2, Math.ceil(r.lines / 2)))} different people. JSON only.`,
+  ].join("\n");
+}
+
+const MEME_FORMATS = new Set(["caption", "pov", "compare", "reaction", "sticker"]);
+const oneLine = (raw: string, who: string) => cleanLines(raw.replace(/\n+/g, " "), who)[0];
+
+/** parse + validate a scene: only cast members speak, every line passes the flavor guard, capped at 8 */
+export function parseScene(raw: string, cast: string[], max = 8): SceneLine[] {
+  const names = new Map(cast.map((c) => [c.toLowerCase(), c]));
+  let o: unknown;
+  try { o = JSON.parse(raw.replace(/^```(json)?\s*|\s*```$/g, "").trim()); } catch { return []; }
+  const list = Array.isArray(o) ? o : Array.isArray((o as { lines?: unknown })?.lines) ? (o as { lines: unknown[] }).lines : [];
+  const out: SceneLine[] = [];
+  for (const x of list) {
+    if (out.length >= max || !x || typeof x !== "object") continue;
+    const r = x as Record<string, unknown>;
+    const who = names.get(cut(r.who, 40).replace(/^@/, "").toLowerCase());
+    if (!who || typeof r.text !== "string") continue;
+    const text = oneLine(r.text, who);
+    if (!text) continue;
+    const to = cut(r.to, 40).replace(/^@/, "").trim();
+    const line: SceneLine = { who, text: text.length > 200 ? text.slice(0, 197) + "..." : text };
+    if (to && to.toLowerCase() !== who.toLowerCase()) line.to = to.toLowerCase() === "god" ? "god" : to;
+    const m = r.meme as Record<string, unknown> | undefined;
+    if (m && typeof m === "object" && MEME_FORMATS.has(String(m.format)) && !out.some((l) => l.meme)) {
+      const top = cut(m.top, 60).trim(), bottom = cut(m.bottom, 60).trim();
+      if (top && isFlavorSafe(top) && (!bottom || isFlavorSafe(bottom)) && !BOTTY.test(top)) line.meme = { format: m.format as SceneMeme["format"], top, bottom: bottom || undefined };
+    }
+    out.push(line);
+  }
+  return out;
 }

@@ -131,6 +131,7 @@ export interface Message {
   pinnedAt?: number;
   mentionsGod?: boolean;
   meme?: MemeSpec; // image attachment
+  ai?: boolean; // written live by the model (an overlay on the seeded world)
   /** reactions that land over time: [emoji, t, by] (by = character id) */
   reactionLog?: [string, number, string][];
 }

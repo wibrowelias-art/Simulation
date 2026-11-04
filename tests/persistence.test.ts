@@ -30,3 +30,21 @@ describe("persistence + local auth", () => {
     expect(await verifyPasscode((await listProfiles(kv))[0], "anything")).toBe(true);
   });
 });
+
+describe("save migrations", () => {
+  it("v6 saves (before live-line flags) load and migrate", async () => {
+    const { migrateWorld, WORLD_VERSION } = await import("../src/lib/sim/world");
+    const kv = indexedDbKV("god-sim-mig6");
+    const p = await createProfile(kv, "God");
+    const w = world();
+    w.version = 6;
+    for (const m of w.messages) delete m.ai;
+    await saveWorld(kv, p.id, w);
+    const back = (await loadWorld(kv, p.id))!;
+    expect(back.version).toBe(WORLD_VERSION);
+    expect(back.messages.length).toBe(w.messages.length);
+    expect(migrateWorld({ ...structuredClone(w), version: 2 })).toBeUndefined();
+    const sum = catchUp(back, T0 + HOUR);
+    expect(sum.messages).toBeGreaterThan(50);
+  });
+});

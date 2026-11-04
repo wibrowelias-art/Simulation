@@ -83,3 +83,18 @@ export function memeAlt(m: MemeSpec): string {
   const parts = [m.top, m.a && m.b ? `${m.a} vs ${m.b}` : m.a, m.bottom, m.shot ? `post by ${m.shot.name}: ${m.shot.text}` : "", m.doc ? `fake leaked document "${m.doc.title}", stamped ${m.doc.stamp}` : ""].filter(Boolean);
   return `${m.f === "leakdoc" ? "Image" : "Meme"}: ${parts.join(". ")}`;
 }
+
+const EMOJI_ONLY = /^[\p{Extended_Pictographic}‍️\s]+$/u;
+/** turn a meme the model asked for (format + short text, already validated) into an original meme spec */
+export function memeFromText(m: { format: string; top: string; bottom?: string }, mood: MemeCtx["mood"], seed: number): MemeSpec {
+  const base = { hue: (seed * 47) % 360, seed: (seed % 999_983) + 1 };
+  const face = FACES[mood][seed % FACES[mood].length];
+  const top = short(m.top, 70), bottom = m.bottom ? short(m.bottom, 70) : undefined;
+  switch (m.format) {
+    case "compare": return { ...base, f: "compare", a: top, b: bottom ?? "me", art: FACES.neutral[seed % 6], art2: face };
+    case "pov": return { ...base, f: "pov", top: /^pov/i.test(top) ? top : `POV: ${top}`, bottom, art: face };
+    case "sticker": return { ...base, f: "reaction", top: EMOJI_ONLY.test(top) ? "" : top, art: EMOJI_ONLY.test(top) ? top.trim().slice(0, 8) : face };
+    case "reaction": return { ...base, f: "reaction", top, art: face };
+    default: return { ...base, f: "caption", top, bottom, art: face };
+  }
+}

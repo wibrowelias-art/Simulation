@@ -5,7 +5,9 @@ import { clearWorld, createProfile, deleteProfile, listProfiles, loadWorld, save
 import { applyAction, baseline, bootstrap, godEdit, godPin, godPost, godPostAction, godReact, godSay, resolveEvent, simulate, summarize, type ActionInput, type RippleResult } from "@/lib/sim/engine";
 import { createWorld } from "@/lib/sim/world";
 import { godJoinVoice, godLeaveVoice, godStopTyping, godTyping } from "@/lib/sim/presence";
-import { liveReply } from "@/lib/live/client";
+import { liveReply, pickLead } from "@/lib/live/client";
+import { ambientTick, liveScene, type SceneHooks } from "@/lib/live/scene";
+import { isIdle, noteActivity } from "@/lib/live/budget";
 import type { CatchUpSummary, PlatformId, Settings, WorldState } from "@/lib/sim/types";
 
 export type Phase = "boot" | "profiles" | "catchup" | "ready" | "elsewhere";
@@ -207,9 +209,28 @@ function step(forceEmit = false) {
   if (r.processed) dirty = true;
   // nobody is looking: keep simulating but skip re-rendering
   if (!hidden() && (forceEmit || now - lastEmit >= 950 || hot(w, st.now, now))) { lastEmit = now; set({ now }); }
+  // the channel on screen: turn the next scripted conversation into a live one (budgeted, visible + active only)
+  if (r.processed && focus) void ambientTick(w, liveHooks(w));
   scheduleSave();
 }
+/** hooks for live overlays: they only repaint/save while this world is still the one on screen */
+function liveHooks(w: WorldState): SceneHooks {
+  return {
+    now: () => Date.now(),
+    changed: () => { if (st.world !== w) return; dirty = true; set({ now: Date.now() }); scheduleSave(); },
+    active: () => !hidden() && !isIdle(Date.now()),
+  };
+}
+let activityBound = false;
+function bindActivity() {
+  if (activityBound || typeof window === "undefined") return;
+  activityBound = true;
+  const on = () => noteActivity(Date.now());
+  for (const ev of ["pointerdown", "keydown", "wheel", "touchstart", "scroll"]) window.addEventListener(ev, on, { passive: true, capture: true });
+  on();
+}
 function startTick() {
+  bindActivity();
   if (tick) clearInterval(tick);
   tick = setInterval(() => step(), 250);
   if (typeof document !== "undefined") {
@@ -265,7 +286,17 @@ export const doSay = (serverId: string, channelId: string, text: string, replyTo
   const before = new Set(w.pending);
   const r = godSay(w, serverId, channelId, text, now, replyTo);
   const fresh = w.pending.filter((m) => !before.has(m) && m.authorId !== "god");
-  void liveReply(w, r.message, fresh, { now: () => Date.now(), changed: () => { if (st.world !== w) return; dirty = true; set({ now: Date.now() }); scheduleSave(); } });
+  const h = liveHooks(w);
+  // talking to someone (DM, reply, @mention): that person answers for real
+  const addressed = serverId === "dm" || !!replyTo || /@[\w.]+/.test(text);
+  if (addressed) void liveReply(w, r.message, fresh, h);
+  if (serverId !== "dm") {
+    // the rest of the room reacts to him and to each other as one live scene
+    const lead = addressed ? pickLead(w, r.message, fresh) : undefined;
+    const skip = new Set(lead ? fresh.filter((m) => m === lead || m.replyTo === lead.id || (m.authorId === lead.authorId && m.channelId === lead.channelId)) : []);
+    const crowd = fresh.filter((m) => m.channelId === channelId && !m.threadOf && !skip.has(m) && m.t <= now + 25_000);
+    void liveScene(w, crowd, { mode: "crowd", lane: "direct", god: r.message, hold: true }, h);
+  }
   return r;
 });
 export const doEdit = (id: string, text: string) => mutate((w, now) => godEdit(w, id, text, now));

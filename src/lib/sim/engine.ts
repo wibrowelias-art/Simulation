@@ -303,6 +303,10 @@ function startRandomEpisode(s: WorldState, rng: Rng, t: number) {
   });
   const ch = rng.weighted(w, (x) => x[1])[0];
   const topic = pickTopic(s, rng, ch);
+  // the channel on screen hears it live, not as a backlog from a bucket that already passed (no extra rng)
+  const f = s.focus;
+  const t0 = Math.floor(t / BUCKET) * BUCKET;
+  if (f && f.channelId === ch.id && f.t > t0 && f.t - t0 < 90_000) t = f.t + 600 + (t - t0) * 0.6;
   runEpisode(s, rng, srv, ch, t, topic);
 }
 
@@ -494,11 +498,13 @@ export function processBucket(s: WorldState, b: number) {
     const ch = srv?.channels.find((c) => c.id === f.channelId);
     if (srv && ch && !ch.announce) {
       let lastT = 0, upcoming = false;
-      for (const m of s.pending) if (m.channelId === ch.id) { if (m.t >= t0) upcoming = true; else lastT = Math.max(lastT, m.t); }
+      const ref = Math.max(t0, f.t);
+      for (const m of s.pending) if (m.channelId === ch.id) { if (m.t >= ref) upcoming = true; else lastT = Math.max(lastT, m.t); }
       for (let i = s.messages.length - 1, n = 0; i >= 0 && n < 600; i--, n++) if (s.messages[i].channelId === ch.id) { lastT = Math.max(lastT, s.messages[i].t); break; }
-      const quietFor = t0 - lastT;
+      const quietFor = ref - lastT;
       const busy = clamp(serverActivity(s, srv, t0) * act * (ch.name === "general" ? 1.4 : 0.8), 0.15, 2);
-      if (!upcoming && quietFor > 12_000 / busy && rng.chance(clamp(0.35 * busy, 0.08, 0.8))) runEpisode(s, rng, srv, ch, t0 + rng.range(1, 6) * 1000, pickTopic(s, rng, ch));
+      // anchored to when the player last looked (live only), so it plays out in front of them
+      if (!upcoming && quietFor > 12_000 / busy && rng.chance(clamp(0.35 * busy, 0.08, 0.8))) runEpisode(s, rng, srv, ch, Math.max(t0, f.t) + rng.range(1, 6) * 1000, pickTopic(s, rng, ch));
     }
   }
   // shared event bus: deliver world events whose time has come

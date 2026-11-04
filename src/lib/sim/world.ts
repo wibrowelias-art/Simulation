@@ -5,7 +5,7 @@ import { makeCharacter } from "./characters";
 import { CELEB_FIELDS } from "./data";
 import { OUTLETS, SERVER_DEFS } from "./servers";
 
-export const WORLD_VERSION = 6;
+export const WORLD_VERSION = 7;
 export const CORE_CAST = 36;
 export const CHARACTER_COUNT = 380;
 
@@ -85,7 +85,7 @@ export function createWorld(seed: string, now: number): WorldState {
 /** bring an older save up to the current version without losing anything */
 export function migrateWorld(w: WorldState): WorldState | undefined {
   if (w.version === WORLD_VERSION) { ensureUndernet(w); return w; }
-  if (w.version !== 3 && w.version !== 4 && w.version !== 5) return undefined;
+  if (w.version < 3 || w.version > WORLD_VERSION) return undefined;
   if (w.version === 3) {
     w.bus ??= [];
     w.godLog ??= [];
@@ -95,6 +95,7 @@ export function migrateWorld(w: WorldState): WorldState | undefined {
   }
   // v3, v4 and early v5 saves may predate The Undernet
   ensureUndernet(w);
+  // v7: messages may carry an optional `ai` flag (live lines); nothing to convert
   w.version = WORLD_VERSION;
   return w;
 }

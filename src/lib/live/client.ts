@@ -3,29 +3,27 @@ import type { Character, Message, WorldState } from "@/lib/sim/types";
 import { charById } from "@/lib/sim/world";
 import { obsessionOf } from "@/lib/sim/social";
 import { crewRole } from "@/lib/sim/undernet";
-import type { LiveLine, LiveRequest } from "./prompt";
+import type { CastCard, LiveLine, LiveRequest } from "./prompt";
+import { LIMITS, resetBudget, spend, used } from "./budget";
 
-export const LIVE_BUDGET = 400; // model calls per browser session
-export const PER_MIN = 30;
-const MIN_GAP = 600; // ms between calls
-const recent: number[] = [];
+export const LIVE_BUDGET = LIMITS.direct.session; // direct model calls per browser session
+export const PER_MIN = LIMITS.direct.perMin;
 const TIMEOUT = 16_000; // the other person is "typing" meanwhile
 const HOLD = TIMEOUT + 800;
 
 export type LiveStatus = { state: "unknown" | "on" | "off" | "unavailable"; reason?: string; used: number; model?: string };
 let status: LiveStatus = { state: "unknown", used: 0 };
-let lastCall = 0;
 const busy = new Set<string>();
 
-function loadUsed() {
-  try { status.used = Number(sessionStorage.getItem("god-sim:live-used") ?? 0) || 0; } catch { /* no storage */ }
+export const liveStatus = () => ({ ...status, used: used("direct") });
+/** the server said live replies can't work here (no key, no billing): stop asking for the rest of the session */
+export const liveUnavailable = () => status.state === "unavailable";
+export function noteResult(res: { ok: boolean; status: number }, j: { code?: string; model?: string }, ok: boolean) {
+  if (ok) status = { ...status, state: "on", reason: undefined, model: j.model };
+  else if (j.code === "no_auth" || j.code === "customer_verification_required" || j.code === "insufficient_funds" || res.status === 404) status = { ...status, state: "unavailable", reason: j.code ?? `http ${res.status}` };
 }
-function saveUsed() {
-  try { sessionStorage.setItem("god-sim:live-used", String(status.used)); } catch { /* no storage */ }
-}
-export const liveStatus = () => status;
 
-const nameOf = (s: WorldState, id: string) => (id === "god" ? "god" : id.startsWith("c") ? charById(s, id)?.username ?? "someone" : "bot");
+export const nameOf = (s: WorldState, id: string) => (id === "god" ? "god" : id.startsWith("c") ? charById(s, id)?.username ?? "someone" : "bot");
 
 export function persona(c: Character, st: WorldState): LiveRequest["persona"] {
   const names = (ids: string[]) => ids.slice(0, 4).map((id) => charById(st, id)?.username).filter((x): x is string => !!x);
@@ -34,6 +32,17 @@ export function persona(c: Character, st: WorldState): LiveRequest["persona"] {
     voice: c.voice, slang: c.slang, emojis: c.emojis, catchphrase: c.catchphrase, interests: c.interests, stance: obsessionOf(c), opinion: Math.round(c.opinion),
     bond: Math.round(c.bond ?? 0), memories: c.memory.slice(-6).map((m) => m.label), pastWithGod: (c.godContacts ?? []).slice(-9, -1).map((g) => `${g.text} (${g.where})`),
     godFacts: (c.godFacts ?? []).slice(-12), friends: names(c.friends), rivals: names(c.rivals), crew: !!crewRole(st, c.id),
+  };
+}
+
+/** the short card used when several characters share one scene prompt */
+export function castCard(c: Character, st: WorldState): CastCard {
+  const names = (ids: string[]) => ids.slice(0, 3).map((id) => charById(st, id)?.username).filter((x): x is string => !!x);
+  const facts = (c.godFacts ?? []).slice(-2).map((f) => `god told them: ${f}`);
+  return {
+    username: c.username, name: c.displayName, age: c.age, occupation: c.occupation, voice: c.voice, slang: c.slang.slice(0, 4), emojis: c.emojis.slice(0, 3),
+    stance: obsessionOf(c), opinion: Math.round(c.opinion), memories: [...facts, ...c.memory.slice(-2).map((m) => m.label)].slice(0, 4),
+    friends: names(c.friends), rivals: names(c.rivals), crew: !!crewRole(st, c.id),
   };
 }
 
@@ -69,20 +78,15 @@ interface Hooks { now: () => number; changed: () => void; post?: typeof fetch }
  */
 export async function liveReply(s: WorldState, god: Message, fresh: Message[], h: Hooks): Promise<"live" | "fallback" | "skipped"> {
   if (s.settings.liveReplies === false || status.state === "unavailable") return "skipped";
-  if (status.used === 0) loadUsed();
-  if (status.used >= LIVE_BUDGET) { status.state = "off"; status.reason = "session budget used up"; return "skipped"; }
+  if (used("direct") >= LIVE_BUDGET) { status.state = "off"; status.reason = "session budget used up"; return "skipped"; }
   const lead = pickLead(s, god, fresh);
   if (!lead || busy.has(lead.channelId)) return "skipped";
   // soft commands land instantly from the scripted bank, and the gh0st crew stays fully scripted (story flavor only)
   // crew stays scripted in The Undernet channels (story beats); their DMs go live, filtered by the flavor guard
   if (lead.intent?.startsWith("cmd:") || god.serverId === "undernet" || (crewRole(s, lead.authorId) && god.serverId !== "dm")) return "skipped";
   const now = h.now();
-  while (recent.length && now - recent[0] > 60_000) recent.shift();
-  if (now - lastCall < MIN_GAP || recent.length >= PER_MIN) return "skipped";
-  lastCall = now;
-  recent.push(now);
   const c = charById(s, lead.authorId);
-  if (!c) return "skipped";
+  if (!c || !spend("direct", now)) return "skipped";
   busy.add(lead.channelId);
 
   // hold: the lead keeps typing; anything replying to it, and the same author's follow-ups, wait behind it
@@ -106,17 +110,14 @@ export async function liveReply(s: WorldState, god: Message, fresh: Message[], h
 
   let lines: string[] | undefined, remember: string | undefined;
   try {
-    status.used++;
-    saveUsed();
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), TIMEOUT);
     const res = await (h.post ?? fetch)("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal });
     clearTimeout(timer);
     const j = (await res.json().catch(() => ({}))) as { lines?: string[]; remember?: string; code?: string; model?: string };
-    if (res.ok && j.lines?.length) { lines = j.lines.slice(0, 3); remember = typeof j.remember === "string" ? j.remember.slice(0, 120) : undefined; status = { ...status, state: "on", reason: undefined, model: j.model }; }
-    else if (j.code === "no_auth" || j.code === "customer_verification_required" || j.code === "insufficient_funds" || res.status === 404) {
-      status = { ...status, state: "unavailable", reason: j.code ?? `http ${res.status}` };
-    }
+    const good = res.ok && !!j.lines?.length;
+    if (good) { lines = j.lines!.filter((x) => typeof x === "string" && x.trim()).slice(0, 3); remember = typeof j.remember === "string" ? j.remember.slice(0, 120) : undefined; }
+    noteResult(res, j, good);
   } catch { /* timeout or offline: fall back */ }
   busy.delete(lead.channelId);
 
@@ -137,12 +138,13 @@ export async function liveReply(s: WorldState, god: Message, fresh: Message[], h
   lead.editText = undefined; lead.editedAt = undefined;
   lead.t = F;
   lead.mentionsGod = true;
+  lead.ai = true;
   // the same author's scripted follow-ups go; extra real lines land as quick follow-ups
   s.pending = s.pending.filter((m) => !sameAuthor.includes(m) || !pend.has(m));
   let t = F;
   for (const txt of lines.slice(1)) {
     const gap = 700 + Math.min(4000, txt.length * 45);
-    const m: Message = { ...lead, id: `${lead.id}x${t}`, text: txt, typingFrom: t + 150, t: t + gap, replyTo: undefined, reactions: [], reactionLog: [] };
+    const m: Message = { ...lead, id: `${lead.id}x${t}`, text: txt, ai: true, typingFrom: t + 150, t: t + gap, replyTo: undefined, reactions: [], reactionLog: [] };
     t += gap;
     s.pending.push(m);
   }
@@ -153,4 +155,4 @@ export async function liveReply(s: WorldState, god: Message, fresh: Message[], h
 }
 
 /** test helper */
-export function resetLive() { status = { state: "unknown", used: 0 }; lastCall = 0; busy.clear(); recent.length = 0; }
+export function resetLive() { status = { state: "unknown", used: 0 }; busy.clear(); resetBudget(); }
