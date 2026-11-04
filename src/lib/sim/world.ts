@@ -98,7 +98,10 @@ export function migrateWorld(w: WorldState): WorldState | undefined {
   // v7: messages may carry an optional `ai` flag (live lines); nothing to convert
   // v8: characters gain long-term memory, relationships, mood and life arcs (all optional, filled in as the world
   // runs). Facts god told them in live chats carry over into long-term memory so nothing is forgotten.
-  if (w.version < 8) for (const c of w.characters) for (const f of c.godFacts ?? []) ((c.mem ??= []).some((m) => m.text === f) || c.mem.push({ about: "god", text: f, t: w.simTime, w: 0.9 }));
+  if (w.version < 8) for (const c of w.characters) for (const f of c.godFacts ?? []) {
+    const mem = (c.mem ??= []);
+    if (!mem.some((m) => m.text === f)) mem.push({ about: "god", text: f, t: w.simTime, w: 0.9 });
+  }
   w.version = WORLD_VERSION;
   return w;
 }
