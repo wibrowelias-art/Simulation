@@ -54,7 +54,12 @@ await box.fill(""); await wait(400);
 const target = (await rows()).reverse().find((r) => r.a && r.a.startsWith("c") && !r.meme);
 before = new Set((await rows()).map((r) => r.id));
 const el = page.locator(`[data-mid="${target.id}"]`);
-await el.scrollIntoViewIfNeeded(); await el.click(); await wait(300); await shot("react-target");
+// on a phone, messages open their action sheet on long-press (like chat apps); tap does nothing
+await el.scrollIntoViewIfNeeded();
+const eb = await el.boundingBox();
+const at = { pointerType: "touch", button: 0, isPrimary: true, clientX: eb.x + 30, clientY: eb.y + 10 };
+await el.dispatchEvent("pointerdown", at); await wait(600); await el.dispatchEvent("pointerup", at); await wait(300);
+await shot("react-target");
 await page.getByRole("button", { name: "React 🔥" }).first().click();
 const reactedAt = ms();
 let authorReply;

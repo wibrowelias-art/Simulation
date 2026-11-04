@@ -129,7 +129,7 @@ export function Chirp({ route }: { route: Route }) {
         <div className="glass sticky top-0 z-10 border-b border-line">
           {tag ? (
             <div className="flex items-center gap-3 px-4 py-3">
-              <button aria-label="Back" className="grid size-9 place-items-center rounded-full hover:bg-surface-2" onClick={() => go("/chirp")}><ArrowLeft className="size-5" /></button>
+              <button aria-label="Back" className="grid size-11 place-items-center rounded-full hover:bg-surface-2" onClick={() => go("/chirp")}><ArrowLeft className="size-5" /></button>
               <div><div className={clsx("text-[17px] font-bold", topic?.about === "god" && "text-gold")}>#{tag}</div><div className="text-[12px] text-muted">{topic ? topic.label : "search"}</div></div>
             </div>
           ) : (

@@ -38,13 +38,20 @@ for (const [label, vp] of [["mobile", { width: 390, height: 844 }], ["desktop", 
   await step("send-reply-react-edit", async () => {
     const box = page.getByPlaceholder("Message #general");
     await box.fill("qa check one"); await box.press("Enter"); await wait(800);
+    // phones: long-press opens the action sheet; desktop: click selects
+    const actions = async (row) => {
+      const bb = await row.boundingBox();
+      if (label !== "mobile") return row.click({ position: { x: bb.width - 8, y: 12 } });
+      const at = { pointerType: "touch", button: 0, isPrimary: true, clientX: bb.x + bb.width - 30, clientY: bb.y + 12 };
+      await row.dispatchEvent("pointerdown", at); await wait(600); await row.dispatchEvent("pointerup", at);
+    };
     const mine = page.locator('[data-author="god"]').last();
-    await mine.click({ position: { x: (await mine.boundingBox()).width - 8, y: 12 } }); await wait(300);
+    await actions(mine); await wait(300);
     await page.getByRole("button", { name: "Edit", exact: true }).first().click(); await wait(200);
     await box.fill("qa check edited"); await box.press("Enter"); await wait(800);
     if (!(await page.getByText("qa check edited").count())) throw new Error("edit did not apply");
     const other = page.locator('[data-author^="c"]').last();
-    await other.click({ position: { x: (await other.boundingBox()).width - 8, y: 12 } }); await wait(300);
+    await actions(other); await wait(300);
     await page.getByRole("button", { name: "Reply", exact: true }).first().click(); await wait(200);
     await box.fill("replying in qa"); await box.press("Enter"); await wait(800);
     if (!(await page.locator('[data-author="god"][data-reply-author^="c"]').count())) throw new Error("reply not linked");

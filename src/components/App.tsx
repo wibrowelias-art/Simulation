@@ -7,17 +7,21 @@ import { go, Money } from "./ui";
 import { netWorth } from "@/lib/sim/world";
 import { trending, unreadIndex } from "@/lib/sim/engine";
 import { fmtCount } from "@/lib/sim/format";
+import dynamic from "next/dynamic";
 import { Lounge } from "./views/Lounge";
-import { Chirp } from "./views/Chirp";
-import { Platforms } from "./views/Platforms";
-import { News } from "./views/News";
-import { Dashboard } from "./views/Dashboard";
-import { GodMode } from "./views/GodMode";
-import { Events } from "./views/Events";
-import { SearchView } from "./views/Search";
-import { Alerts } from "./views/Alerts";
-import { ProfileView } from "./views/Profile";
-import { SettingsView } from "./views/Settings";
+
+// the Lounge is the front door; everything else loads when first opened (smaller cold start)
+const Loading = () => <div className="grid h-full place-items-center"><Crown className="size-7 animate-pulse text-gold/60" /></div>;
+const Chirp = dynamic(() => import("./views/Chirp").then((m) => m.Chirp), { loading: Loading });
+const Platforms = dynamic(() => import("./views/Platforms").then((m) => m.Platforms), { loading: Loading });
+const News = dynamic(() => import("./views/News").then((m) => m.News), { loading: Loading });
+const Dashboard = dynamic(() => import("./views/Dashboard").then((m) => m.Dashboard), { loading: Loading });
+const GodMode = dynamic(() => import("./views/GodMode").then((m) => m.GodMode), { loading: Loading });
+const Events = dynamic(() => import("./views/Events").then((m) => m.Events), { loading: Loading });
+const SearchView = dynamic(() => import("./views/Search").then((m) => m.SearchView), { loading: Loading });
+const Alerts = dynamic(() => import("./views/Alerts").then((m) => m.Alerts), { loading: Loading });
+const ProfileView = dynamic(() => import("./views/Profile").then((m) => m.ProfileView), { loading: Loading });
+const SettingsView = dynamic(() => import("./views/Settings").then((m) => m.SettingsView), { loading: Loading });
 import { AuthScreen, CatchUpScreen } from "./views/Auth";
 import { AwaySummary, BreakingOverlay, Toast } from "./views/Overlays";
 
@@ -58,6 +62,15 @@ export function App() {
   const route = useRoute();
   const [more, setMore] = useState(false);
   useEffect(() => { init(); }, []);
+  // iOS doesn't shrink the layout for the keyboard: size the app to the visible area so the composer stays in view
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const fit = () => { document.documentElement.style.setProperty("--app-h", `${Math.round(vv.height)}px`); if (vv.offsetTop) window.scrollTo(0, 0); };
+    fit();
+    vv.addEventListener("resize", fit);
+    return () => vv.removeEventListener("resize", fit);
+  }, []);
   const w = app.world;
   useEffect(() => {
     if (!w) return;
@@ -79,6 +92,7 @@ export function App() {
   badge.lounge = mentions;
   const moreBadge = NAV.filter((n) => !MOBILE.includes(n.id)).reduce((a, n) => a + (badge[n.id] ?? 0), 0);
 
+  const inLounge = route.view === "lounge" || !NAV.some((x) => x.id === route.view) && route.view !== "u";
   let body: React.ReactNode;
   switch (route.view) {
     case "chirp": body = <Chirp route={route} />; break;
@@ -95,8 +109,9 @@ export function App() {
   }
 
   return (
-    <div className="flex h-dvh flex-col">
-      <TopBar />
+    <div className="flex h-[var(--app-h,100dvh)] flex-col">
+      {/* in the Lounge on a phone the chat gets the whole screen, like a chat app; the ticker lives everywhere else */}
+      <div className={clsx(inLounge && "max-md:hidden")}><TopBar /></div>
       <div className="flex min-h-0 flex-1">
         <nav className="hidden w-[76px] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface py-3 md:flex lg:w-[200px] lg:items-stretch lg:px-3">
           {NAV.map((n) => {
@@ -115,7 +130,7 @@ export function App() {
         </nav>
         <main className="min-w-0 flex-1 overflow-hidden">{body}</main>
       </div>
-      <nav className="flex shrink-0 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav aria-label="Sections" className={clsx("flex shrink-0 border-t pb-[env(safe-area-inset-bottom)] md:hidden", inLounge ? "lounge border-black/30 bg-bg" : "border-line bg-surface")}>
         {NAV.filter((n) => MOBILE.includes(n.id)).map((n) => (
           <button key={n.id} onClick={() => { haptic(); go(`/${n.id}`); }} aria-current={route.view === n.id ? "page" : undefined} className={clsx("relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 text-[10px] transition-colors active:scale-95", route.view === n.id ? "text-fg" : "text-muted", n.id === "god" && "text-gold")}>
             <n.icon className="size-5" />
@@ -134,7 +149,7 @@ export function App() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
           <div role="dialog" aria-label="More" className="sheet-up absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-line bg-surface p-3 pb-[max(1rem,env(safe-area-inset-bottom))]" onClick={(e) => e.stopPropagation()}>
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-            <div className="mb-2 flex items-center justify-between px-1"><span className="text-[13px] font-semibold uppercase tracking-wider text-muted">More</span><button aria-label="Close" onClick={() => setMore(false)} className="grid size-9 place-items-center rounded-full bg-surface-3"><X className="size-4" /></button></div>
+            <div className="mb-2 flex items-center justify-between px-1"><span className="text-[13px] font-semibold uppercase tracking-wider text-muted">More</span><button aria-label="Close" onClick={() => setMore(false)} className="grid size-11 place-items-center rounded-full bg-surface-3"><X className="size-4" /></button></div>
             <div className="grid grid-cols-3 gap-2">
               {NAV.filter((n) => !MOBILE.includes(n.id)).map((n) => (
                 <button key={n.id} onClick={() => { haptic(); setMore(false); go(`/${n.id}`); }} className={clsx("relative flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl bg-surface-2 text-[12px] font-medium active:scale-95", route.view === n.id && "ring-1 ring-gold")}>
@@ -166,7 +181,7 @@ function TopBar() {
   return (
     <header className="glass relative z-20 shrink-0 border-b border-line">
       <div className="flex items-center gap-3 px-3 py-2 md:px-4">
-        <button onClick={() => go("/dashboard")} className="flex items-center gap-2">
+        <button onClick={() => go("/dashboard")} aria-label="Empire dashboard" className="-my-1.5 flex min-h-[44px] items-center gap-2">
           <span className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-[#fff3c4] via-gold to-[#8a6416] text-[#120c02]"><Crown className="size-5" /></span>
           <span className="hidden text-[15px] font-black tracking-[0.2em] sm:inline">GOD</span>
         </button>

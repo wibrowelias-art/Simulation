@@ -54,7 +54,6 @@ const idb = (fn) => page.evaluate(([src]) => new Promise((res) => {
   r.onsuccess = () => {
     const db = r.result;
     db.onversionchange = () => db.close();
-    // eslint-disable-next-line no-new-func
     new Function("db", "done", src)(db, (v) => { db.close(); done(v); });
   };
 }), [fn]);

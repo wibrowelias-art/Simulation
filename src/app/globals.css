@@ -188,3 +188,47 @@ body {
 .mm-lines { animation: mm-lines 0.6s ease-in-out infinite; }
 [data-motion="reduced"] .mm-bob, [data-motion="reduced"] .mm-shake, [data-motion="reduced"] .mm-zoom, [data-motion="reduced"] .mm-spin, [data-motion="reduced"] .mm-lines { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mm-bob, .mm-shake, .mm-zoom, .mm-spin, .mm-lines { animation: none; } }
+
+/* ---------------------------------------------------------------- the Lounge
+   Chat-app geometry and a neutral dark palette (familiar to anyone who uses community chat apps),
+   with the Lounge's own gold accent and logo. Scoped so the rest of the app keeps its theme. */
+.lounge {
+  --bg: #1e1f22;        /* server rail */
+  --surface: #2b2d31;   /* channel drawer, member list, sheets */
+  --surface-2: #35373c; /* hover */
+  --surface-3: #383a40; /* inputs, chips */
+  --chat: #313338;      /* message pane */
+  --chat-hover: #2e3035;
+  --selected: #404249;
+  --border: #3f4147;
+  --text: #dbdee1;
+  --muted: #949ba4;
+  --header: #f2f3f5;
+  --up: #23a55a;
+  --down: #f23f43;
+  --idle: #f0b232;
+  --mention: rgb(240 178 50 / 0.08);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.lounge .chat-pane { background: var(--chat); }
+.lounge .msg-row:hover { background: var(--chat-hover); }
+.lounge .msg-text { color: var(--text); font-size: 16px; line-height: 1.375; }
+@media (min-width: 768px) { .lounge .msg-text { font-size: 15px; } }
+.lounge .msg-name { color: var(--header); font-size: 16px; font-weight: 600; line-height: 1.25; }
+.lounge .mention-row { background: var(--mention); box-shadow: inset 2px 0 0 var(--idle); }
+.lounge .mention-row:hover { background: rgb(240 178 50 / 0.12); }
+/* reply spine: the little curved line from a reply to the message above */
+.reply-spine { position: relative; }
+.reply-spine::before { content: ""; position: absolute; left: -30px; top: 50%; width: 26px; height: 12px; border-left: 2px solid #4e5058; border-top: 2px solid #4e5058; border-top-left-radius: 6px; }
+/* bigger hit area for small inline controls (reaction chips) without changing how they look */
+.hit { position: relative; }
+.hit::after { content: ""; position: absolute; inset: -8px -2px; }
+.hit-lg { position: relative; }
+.hit-lg::after { content: ""; position: absolute; inset: -12px -2px; }
+/* long-press feedback */
+.press { transition: background-color 0.15s; }
+.press[data-pressing] { background: var(--selected) !important; }
+@keyframes sheet-spring { 0% { transform: translateY(100%); } 70% { transform: translateY(-1.5%); } 100% { transform: none; } }
+.sheet-spring { animation: sheet-spring 0.36s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+[data-motion="reduced"] .sheet-spring { animation: none; }
+@media (prefers-reduced-motion: reduce) { .sheet-spring { animation: none; } }

@@ -13,7 +13,8 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
 };
 
-export const viewport: Viewport = { themeColor: "#08090d", width: "device-width", initialScale: 1, viewportFit: "cover" };
+// resizes-content: the on-screen keyboard shrinks the layout instead of covering the composer
+export const viewport: Viewport = { themeColor: "#08090d", width: "device-width", initialScale: 1, viewportFit: "cover", interactiveWidget: "resizes-content" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
