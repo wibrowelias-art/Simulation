@@ -104,7 +104,7 @@ export const CHAIN = {
   memory: ["last time he was here he said \"{past}\"", "this is like when he said \"{past}\" in {pastwhere}", "@god was {mem} real?", "@god still thinking about {mem}",
     "@god remember \"{past}\"? we do", "first time since the \"{past}\" message", "@god are we getting a sequel to \"{past}\""],
   upTo: ["@god what have you been up to lately", "@god how's {holding}", "@god you've been quiet, what's cooking", "@god where were you all week", "@god what are you doing today"],
-  drift: ["anyway did anyone see {world}", "ok back to {personal}", "unrelated but {world} is wild", "while we're here, anyone watching {world}?", "i'm eating cereal for dinner btw"],
+  drift: ["anyway did anyone see {world}", "ok anyway. {personal}", "unrelated but {world} is wild", "while we're here, anyone watching {world}?", "i'm eating cereal for dinner btw"],
   mod: ["ok everyone breathe, he's allowed to say hi", "keep it chill or he'll leave", "slowmode is on for 10s, behave", "please don't spam pings", "one message each, let's not scare him off"],
   still: ["is he still here?", "@god come back", "ok he left", "he's gone isn't he", "@god you still there?", "he's lurking, i can feel it"],
 };
@@ -166,5 +166,5 @@ export const AMBIENT: Record<Obsession, string[]> = {
     "fan accounts for a guy who says \"{past}\" 😭", "attention economy and he's the landlord"],
   hater: ["god fans are actually the worst", "\"{past}\" is the cringiest message in server history", "his net worth won't buy taste", "we need a god-free channel",
     "every day this server is 80% glazing", "can a mod ban the word god"],
-  indifferent: ["is god that rich guy?", "anyway {personal}", "this server is weird about that guy", "i'm just here for {world}"],
+  indifferent: ["is god that rich guy?", "anyway. {personal}", "this server is weird about that guy", "i'm just here for {world}"],
 };

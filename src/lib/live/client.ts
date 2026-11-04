@@ -3,7 +3,7 @@ import type { Character, Message, WorldState } from "@/lib/sim/types";
 import { charById } from "@/lib/sim/world";
 import { obsessionOf } from "@/lib/sim/social";
 import { crewRole } from "@/lib/sim/undernet";
-import { validMeme, type CastCard, type LiveLine, type LiveRequest, type SceneMeme } from "./prompt";
+import { validMeme, voiceNormalize, type CastCard, type LiveLine, type LiveRequest, type SceneMeme } from "./prompt";
 import { memeFromText } from "@/lib/sim/memes";
 import { LIMITS, resetBudget, spend, used } from "./budget";
 import { moodWord, relOf, rememberLong, topMemories } from "@/lib/sim/memory";
@@ -130,7 +130,7 @@ export async function liveReply(s: WorldState, god: Message, fresh: Message[], h
     const j = (await res.json().catch(() => ({}))) as { lines?: string[]; remember?: string; code?: string; model?: string; meme?: unknown };
     meme = validMeme(j.meme);
     const good = res.ok && !!j.lines?.length;
-    if (good) { lines = j.lines!.filter((x) => typeof x === "string" && x.trim()).slice(0, 3); remember = typeof j.remember === "string" ? j.remember.slice(0, 120) : undefined; }
+    if (good) { lines = j.lines!.filter((x) => typeof x === "string" && x.trim()).slice(0, 3).map((x) => voiceNormalize(x, c.voice)); remember = typeof j.remember === "string" ? j.remember.slice(0, 120) : undefined; }
     noteResult(res, j, good);
   } catch { /* timeout or offline: fall back */ }
   busy.delete(lead.channelId);

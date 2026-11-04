@@ -4,6 +4,7 @@ import { indexedDbKV, type KV } from "@/lib/persistence/kv";
 import { clearWorld, createProfile, deleteProfile, listProfiles, loadWorld, saveWorld, setPasscode, updateProfile, verifyPasscode, type Profile } from "@/lib/persistence/profiles";
 import { applyAction, baseline, bootstrap, bucketsToSimulate, godEdit, godPin, godPost, godPostAction, godReact, godSay, resolveEvent, simulate, summarize, type ActionInput, type RippleResult } from "@/lib/sim/engine";
 import { createWorld } from "@/lib/sim/world";
+import { dmChannel } from "@/lib/sim/godspeak";
 import { godAbandonTyping, godJoinVoice, godLeaveVoice, godTyping, voiceChannels } from "@/lib/sim/presence";
 import { liveReply, pickLead } from "@/lib/live/client";
 import { ambientTick, liveMoment, liveScene, type SceneHooks } from "@/lib/live/scene";
@@ -22,7 +23,7 @@ export interface AppState {
   progress: number; // 0..1 catch-up progress
   summary?: Summary;
   breaking?: RippleResult;
-  toast?: { text: string; t: number; ms?: number };
+  toast?: { text: string; t: number; ms?: number; link?: string };
   rev: number;
   lastRead: Record<string, number>;
 }
@@ -181,7 +182,12 @@ async function runCatchUpInner(w: WorldState, to: number, quiet = false) {
   // a tab that stayed open in the background just catches up in place, no "while you were away" card
   const summary = !quiet && gone > 10 * 60e3 ? summarize(w, base, to) : undefined;
   set(quiet ? { world: w, now: to } : { world: w, phase: "ready", now: to, summary, progress: 1 });
-  if (w.undernet?.announce) { delete w.undernet.announce; setTimeout(() => toast("New: The Undernet 🕸️ · DM gh0st_", 6000), 1200); }
+  if (w.undernet?.announce) {
+    delete w.undernet.announce;
+    // the one-time tip for saves from before The Undernet: tap it to open gh0st's DMs
+    const g = w.undernet.crew.gh0st;
+    setTimeout(() => toast("New: The Undernet 🕸️ · DM gh0st_", 9000, g ? `/lounge/dm/${dmChannel("god", g)}` : "/lounge/undernet"), 1200);
+  }
   dirty = true;
   scheduleSave();
   startTick();
@@ -355,7 +361,8 @@ export const editWorld = (fn: (w: WorldState) => void) => mutate((w) => fn(w));
 export const updateSettings = (p: Partial<Settings>) => mutate((w) => { Object.assign(w.settings, p); });
 export const dismissSummary = () => set({ summary: undefined });
 export const dismissBreaking = () => set({ breaking: undefined });
-export const toast = (text: string, ms = 3500) => set({ toast: { text, t: Date.now(), ms } });
+export const dismissToast = () => set({ toast: undefined });
+export const toast = (text: string, ms = 3500, link?: string) => set({ toast: { text, t: Date.now(), ms, link } });
 
 let readTimer: ReturnType<typeof setTimeout> | undefined;
 export function markRead(channelId: string) {

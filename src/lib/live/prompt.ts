@@ -296,3 +296,14 @@ export function parseScene(raw: string, cast: string[], max = 8): SceneLine[] {
   }
   return out;
 }
+
+/** models tidy things up; real people in these voices don't: lowercase, no full stop, short for terse people */
+export function voiceNormalize(text: string, voice: string): string {
+  let t = text.trim();
+  if (voice === "zoomer" || voice === "lowercase" || voice === "terse") t = t.replace(/(^|[^@\w])([A-Z][a-z']*)/g, (m, pre: string, w: string) => pre + w.toLowerCase());
+  if (voice === "zoomer" || voice === "lowercase" || voice === "terse" || voice === "emoji") t = t.replace(/(?<!\.)\.$/, "");
+  if (voice === "zoomer") t = t.replace(/[;:]\s/g, " ").replace(/\s*—\s*/g, " ");
+  else t = t.replace(/\s*—\s*/g, ", "); // nobody types em dashes in a group chat
+  if (voice === "terse" && t.length > 80) t = t.slice(0, 80).replace(/\s+\S*$/, "");
+  return t || text;
+}

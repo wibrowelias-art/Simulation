@@ -10,7 +10,7 @@ import { memeFromText } from "@/lib/sim/memes";
 import { crewRole } from "@/lib/sim/undernet";
 import { canSpend, spend, type Lane } from "./budget";
 import { castCard, liveUnavailable, nameOf, noteResult } from "./client";
-import { parseScene, type LiveLine, type SceneLine, type SceneMode, type SceneRequest } from "./prompt";
+import { parseScene, voiceNormalize, type LiveLine, type SceneLine, type SceneMode, type SceneRequest } from "./prompt";
 
 export interface SceneHooks { now: () => number; changed: () => void; post?: typeof fetch; active?: () => boolean; random?: () => number }
 export interface SceneOpts { mode: SceneMode; lane: Lane; god?: Message; moment?: string; first?: string; about?: string; hold?: boolean }
@@ -106,7 +106,7 @@ export async function liveScene(s: WorldState, group: Message[], o: SceneOpts, h
     const t = Math.round(Math.max(slot ? slot.t : 0, prevT + (i ? 700 + Math.min(3200, len * 40) : 0)));
     const m: Message = slot ?? { ...open[open.length - 1], id: `${open[0].id}s${i}`, reactions: [], reactionLog: [], pinnedAt: undefined, cascaded: undefined };
     m.authorId = c.id;
-    m.text = l.text;
+    m.text = voiceNormalize(l.text, c.voice);
     m.editText = undefined; m.editedAt = undefined; m.meme = undefined;
     m.t = t;
     m.typingFrom = Math.round(Math.max(at, t - clamp(len * 55, 900, 5000)));

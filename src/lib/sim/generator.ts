@@ -3,7 +3,7 @@ import type { Article, ArticleKind, Character, Channel, Outlet, Server, Topic, W
 import { expand, type Slots } from "./grammar";
 import { styleText } from "./style";
 import { fmtMoney } from "./format";
-import { CAT_OPEN, CHIRP_GOD, CHIRP_LIFE, CMP, GOD_OPEN, HEADLINES, PERSONAL, POLITE, REPLY, STANCE_TAIL, THING, WORLD_OPEN } from "./templates";
+import { CAT_OPEN, CHIRP_GOD, CHIRP_LIFE, CMP, GOD_OPEN, GOD_STORY, HEADLINES, PERSONAL, POLITE, REPLY, STANCE_TAIL, THING, WORLD_OPEN } from "./templates";
 import { EMOJI_HYPE, EMOJI_LAUGH, EMOJI_SHADE } from "./data";
 import { actionDef, type ActionKind } from "./topics";
 import { ambientLine } from "./godspeak";
@@ -65,10 +65,28 @@ export function slotsFor(rng: Rng, state: WorldState, c: Character | undefined, 
     laugh: () => (c && !young(c) ? rng.pick(["lol", "haha", "😂", "LOL"]) : rng.pick(c?.emojis.filter((e) => EMOJI_LAUGH.includes(e)).length ? c.emojis.filter((e) => EMOJI_LAUGH.includes(e)) : EMOJI_LAUGH)),
     hype: () => rng.pick(EMOJI_HYPE),
     shade: () => rng.pick(EMOJI_SHADE),
-    world: () => (hotWorld.length ? rng.pick(hotWorld).label : rng.pick(PERSONAL)),
+    // {world} sits inside "did anyone see {world}": it must be a thing, never a personal sentence
+    world: () => (hotWorld.length ? rng.pick(hotWorld).label : rng.pick(WORLD_FALLBACK)),
     personal: () => rng.pick(PERSONAL),
     ...extra,
   };
+}
+
+const WORLD_FALLBACK = ["the game last night", "that new show everyone's watching", "the weather today", "the new phone ads", "that cooking video going around", "the concert tickets drama"];
+const PURCHASE = /\b(buys?|bought|purchase|accountant|bank app|lunch money|second fridge)\b|\{amt\}|\{subj\}/;
+const BUYING = new Set(["island", "property", "jet", "vehicle", "business", "coin", "investment", "acquisition", "hire", "organization", "event"]);
+const ACTION = /\b(did|does|doing|after|casually did) \{label\}|could've funded|\{label\} at \{amt\}/;
+/** a line that fits the topic: purchase jokes only for things with a price tag, "god did X" only for things he did */
+export function fitsTopic(t: string, topic: Topic) {
+  if (!(topic.amount && BUYING.has(topic.category)) && PURCHASE.test(t)) return false;
+  if (!topic.facts.action && ACTION.test(t)) return false;
+  return true;
+}
+function pickFitting(rng: Rng, bank: string[], topic: Topic, stance?: Character["stance"]) {
+  const ok = bank.filter((t) => fitsTopic(t, topic));
+  if (ok.length) return rng.pick(ok);
+  // nothing in this bank fits (e.g. only purchase jokes for a leak): talk about it as a storyline instead
+  return rng.pick(stance ? GOD_STORY[stance] : bank) + (stance && bank.some((t) => t.includes("{tag}")) ? " {tag}" : "");
 }
 
 export const TemplateGenerator: ContentGenerator = {
@@ -88,7 +106,8 @@ export const TemplateGenerator: ContentGenerator = {
         if (!topic) { tpl = rng.pick(PERSONAL); break; }
         if (topic.about === "world") { tpl = rng.pick(WORLD_OPEN[topic.category] ?? WORLD_OPEN.drama); break; }
         if (!topic.facts.action && CAT_OPEN[topic.category] && rng.chance(0.75)) tpl = (() => { const base = rng.pick(CAT_OPEN[topic.category]); return rng.chance(0.55) ? `${base}${/[?!]$/.test(base) ? " " : rng.pick([". ", ", ", " "])}${rng.pick(STANCE_TAIL[c.stance])}` : base; })();
-        else tpl = CAT_OPEN[topic.category] && rng.chance(0.35) ? rng.pick(CAT_OPEN[topic.category]) : rng.pick(GOD_OPEN[c.stance]);
+        else if (!topic.facts.action) tpl = rng.chance(0.5) && CAT_OPEN[topic.category] ? rng.pick(CAT_OPEN[topic.category]) : rng.pick(GOD_STORY[c.stance]);
+        else tpl = CAT_OPEN[topic.category] && rng.chance(0.35) ? rng.pick(CAT_OPEN[topic.category]) : pickFitting(rng, GOD_OPEN[c.stance], topic, c.stance);
         break;
       case "personal": {
         // people mostly talk about what's actually going on in their life right now
@@ -119,7 +138,7 @@ export const TemplateGenerator: ContentGenerator = {
     const slots = slotsFor(rng, ctx.state, c, topic);
     let tpl: string;
     if (!topic) tpl = rng.pick(CHIRP_LIFE);
-    else if (topic.about === "god") tpl = rng.chance(0.7) ? rng.pick(CHIRP_GOD[c.stance]) : rng.pick(GOD_OPEN[c.stance]) + " {tag}";
+    else if (topic.about === "god") tpl = rng.chance(0.7) ? pickFitting(rng, CHIRP_GOD[c.stance], topic, c.stance) : (topic.facts.action ? pickFitting(rng, GOD_OPEN[c.stance], topic, c.stance) : rng.pick(GOD_STORY[c.stance])) + " {tag}";
     else tpl = rng.pick(WORLD_OPEN[topic.category] ?? WORLD_OPEN.drama) + " {tag}";
     let text = expand(tpl, slots, rng);
     if (c.voice === "zoomer" || c.voice === "lowercase") text = styleText(rng, c, text, { allowTypo: false }).text;

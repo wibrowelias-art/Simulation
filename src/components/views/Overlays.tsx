@@ -1,7 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { X } from "lucide-react";
-import { dismissBreaking, dismissSummary, useApp, type Summary } from "../store";
+import { dismissBreaking, dismissSummary, dismissToast, useApp, type Summary } from "../store";
 import { Money, go } from "../ui";
 import type { RippleResult } from "@/lib/sim/engine";
 import { fmtCount } from "@/lib/sim/format";
@@ -62,5 +62,7 @@ export function BreakingOverlay({ r }: { r: RippleResult }) {
 export function Toast() {
   const { toast, now } = useApp();
   if (!toast || Math.max(now, toast.t) - toast.t > (toast.ms ?? 3500)) return null;
-  return <div className="pop fixed bottom-20 left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-full border border-line bg-surface-3 px-4 py-2 text-[13px] shadow-2xl md:bottom-6">{toast.text}</div>;
+  const cls = "pop fixed bottom-20 left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-full border border-line bg-surface-3 px-4 py-2 text-[13px] shadow-2xl md:bottom-6";
+  if (toast.link) return <button onClick={() => { go(toast.link!); dismissToast(); }} className={`${cls} min-h-[44px] font-semibold`}>{toast.text} <span className="text-gold">›</span></button>;
+  return <div role="status" className={cls}>{toast.text}</div>;
 }

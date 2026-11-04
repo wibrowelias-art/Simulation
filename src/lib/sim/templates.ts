@@ -24,7 +24,7 @@ export const GOD_OPEN: Record<Stance, string[]> = {
   memer: [
     "{god} after {label}: 'it was a small purchase' {laugh}", "me checking my bank app after reading about {label} 🧍", "pov: you're the intern who has to explain {label} to the accountant", "{label} speedrun any%",
     "{god}: buys {subj}. me: buys {thing}. we are not the same", "this is going in #memes immediately", "new template just dropped: '{god} after {label}'", "{label} but every time he does it a frog gets a lambo",
-    "my mom asked if i'm like {god}. i said yes i also did {label} (i bought {thing})", "breaking: local man still processing {label}", "the {label} arc is my favorite season of the internet", "{god} is the final boss of capitalism and {label} was his ult",
+    "my mom asked if i'm like {god}. i said yes, i also made a big purchase today ({thing})", "breaking: local man still processing {label}", "the {label} arc is my favorite season of the internet", "{god} is the final boss of capitalism and {label} was his ult",
     "average {god} enjoyer vs average {label} hater", "someone make the {label} wojak rn", "{label} has the same energy as buying a second fridge but it's {amt}",
   ],
   analyst: [
@@ -53,6 +53,22 @@ export const GOD_OPEN: Record<Stance, string[]> = {
   indifferent: [
     "is {label} a big deal or", "ok so {label} happened. anyway", "saw something about {label} on my feed, didn't read it", "{label}? i'm just trying to finish my shift", "people really care about {label} huh",
   ],
+};
+
+/**
+ * Openers about a @god storyline he didn't *do* (a rumor, leak, viral clip, someone mentioning him, him chatting).
+ * GOD_OPEN assumes an action ("god did {label}"), which reads as nonsense for "the garage photo leak".
+ */
+export const GOD_STORY: Record<Stance, string[]> = {
+  worshipper: ["{label} won't touch him {hype}", "the {label} discourse is just haters coping", "{god} doesn't even need to respond to {label}", "imagine thinking {label} matters to {god}", "{label} only makes him bigger tbh"],
+  fan: ["ok the {label} stuff is kinda funny", "still rooting for him through {label}", "{label} is so him lol", "lowkey invested in the {label} saga", "can't wait for him to address {label}"],
+  memer: ["{label} is my roman empire", "the {label} lore keeps growing", "someone make a timeline of {label}", "{label} is peak content", "adding {label} to the god cinematic universe"],
+  analyst: ["Worth separating facts from noise on {label}.", "On {label}: no primary source yet.", "Watch how his camp handles {label}.", "{label} is mostly engagement at this point."],
+  skeptic: ["who's the actual source on {label}", "{label} smells like engagement bait", "screenshots aren't proof, {label} included", "give it a day, {label} will look different"],
+  hater: ["{label} is the real {god}", "not surprised by {label} at all", "can't wait for the {label} apology post", "{label} and his fans still won't admit it"],
+  jealous: ["of course {label} won't hurt him", "anyone else would be cooked over {label}", "must be nice to have {label} be your biggest problem"],
+  conspiracist: ["{label} is a distraction", "the timing on {label} is not random", "{label} came out right on schedule. think about it"],
+  indifferent: ["what's {label} even about", "{label} again? ok", "scrolled past {label}, didn't read it"],
 };
 
 /** Stance tails appended to storyline openers (rumor/leak/viral/...). */
@@ -129,7 +145,7 @@ export const REPLY: Record<string, string[]> = {
   memory: ["this is {past} all over again", "remember {past}? same energy", "yall said the same thing about {past}", "{past} flashbacks", "after {past} nothing surprises me", "still not over {past} tbh"],
   mod: ["keep it civil", "take it to dms please", "moving this to #memes", "last warning to both of you", "no personal attacks pls", "please keep #{ch} on topic", "chill. both of you", "ok this thread is done", "slowmode on for 5 min"],
   backup: ["@{user} is right tho", "listen to {user}", "+1 to what {user} said", "{user} said it best", "what {user} said"],
-  drift: ["anyway did anyone see {world}", "unrelated but {personal}", "ok changing topic, {world} is crazy", "can we talk about {world} instead", "meanwhile {world} and nobody cares"],
+  drift: ["anyway did anyone see {world}", "unrelated but: {personal}", "ok changing topic, {world} is crazy", "can we talk about {world} instead", "meanwhile {world} and nobody cares"],
   godReply: ["HE REPLIED", "{god} spoke 🙏", "omg he's here", "act natural guys", "screenshotting before he deletes", "god is in the chat {laugh}", "W god", "@god notice me", "he's online!!", "god's typing is a blessing"],
   godReplyHater: ["oh look who showed up", "ratio'd by a server of nobodies", "lol he reads this", "even his chat messages are mid", "pr team typing", "nobody asked"],
 };
