@@ -35,7 +35,13 @@ export function diurnalAt(chronotype: Character["chronotype"], localHour: number
   return 0.05 + 0.4 * bump(h, 12.5, 2.4) + 1.0 * bump(h, 22, 2.6);
 }
 export const localHour = (c: Pick<Character, "tz">, t: number) => (((t / HOUR + c.tz) % 24) + 24) % 24;
-export const diurnal = (c: Character, t: number) => diurnalAt(c.chronotype, localHour(c, t));
+// diurnal() runs for every candidate of every weighted pick: tabulate it per chronotype at 1-minute resolution
+const DIURNAL: Record<Character["chronotype"], Float64Array> = (() => {
+  const out = {} as Record<Character["chronotype"], Float64Array>;
+  for (const ct of ["morning", "evening", "owl"] as const) { const a = new Float64Array(1440); for (let i = 0; i < 1440; i++) a[i] = diurnalAt(ct, i / 60); out[ct] = a; }
+  return out;
+})();
+export const diurnal = (c: Character, t: number) => (DIURNAL[c.chronotype] ?? DIURNAL.evening)[Math.floor(localHour(c, t) * 60) % 1440];
 
 const profileCache = new WeakMap<object, Float64Array>();
 /** Activity-weighted presence for a set of members by UTC hour (normalised to mean 1). */
@@ -58,7 +64,7 @@ function profile(key: object, members: Character[]): Float64Array {
 }
 const profAt = (p: Float64Array, t: number) => p[Math.floor((((t / HOUR) % 24) + 24) % 24 * 2) % 48];
 export const globalActivity = (s: WorldState, t: number) => profAt(profile(s.characters, s.characters), t);
-const serverActivity = (s: WorldState, srv: Server, t: number) => profAt(profile(srv.members, srv.members.map((id) => charById(s, id))), t);
+const serverActivity = (s: WorldState, srv: Server, t: number) => profAt(profileCache.get(srv.members) ?? profile(srv.members, srv.members.map((id) => charById(s, id))), t);
 
 // ---------- helpers ----------
 export const nid = (s: WorldState, p: string) => `${p}${(s.counter++).toString(36)}`;
@@ -139,10 +145,19 @@ function reactionsFor(s: WorldState, rng: Rng, srv: Server, c: Character | undef
 
 /** dedupe key: case, emoji, punctuation and @handles don't make a line "new" */
 export const textKey = (t: string) => t.toLowerCase().replace(/@[\w.]+/g, "").replace(/[^\p{L}\p{N} ]/gu, "").replace(/\s+/g, " ").trim();
-export const seenText = (s: WorldState, t: string) => s.recentTexts.includes(textKey(t));
+// a Set mirror of the (persisted) dedupe ring, rebuilt whenever the ring array is replaced
+const seenSets = new WeakMap<string[], Set<string>>();
+const seenSet = (s: WorldState) => { let set = seenSets.get(s.recentTexts); if (!set) seenSets.set(s.recentTexts, (set = new Set(s.recentTexts))); return set; };
+export const seenText = (s: WorldState, t: string) => seenSet(s).has(textKey(t));
 export function rememberText(s: WorldState, t: string) {
-  s.recentTexts.push(textKey(t));
-  if (s.recentTexts.length > 600) s.recentTexts.splice(0, s.recentTexts.length - 600);
+  const k = textKey(t), set = seenSet(s);
+  s.recentTexts.push(k);
+  set.add(k);
+  // trim in batches (the ring holds 600-700): rebuilding the mirror on every push would be O(n) per line
+  if (s.recentTexts.length > 700) {
+    s.recentTexts.splice(0, s.recentTexts.length - 600);
+    seenSets.set(s.recentTexts, new Set(s.recentTexts));
+  }
 }
 
 function chatText(s: WorldState, rng: Rng, c: Character, intent: Intent, srv: Server, ch: Channel, t: number, topic?: Topic, target?: Character, typoWord?: string): { text: string; typoWord?: string; clean?: string; life?: boolean } {
@@ -337,7 +352,10 @@ export function engagementFor(rng: Rng, author: Character | undefined, heat: num
 
 export function makePost(s: WorldState, rng: Rng, t: number, o: { topic?: Topic | null; author?: Character; platform?: PlatformId; quote?: boolean; replyToId?: string } = {}): Post {
   const platform = o.platform ?? rng.weighted(PLATFORM_W, (x) => x[1])[0];
-  const author = o.author ?? rng.weighted(s.characters, (c) => c.activity * diurnal(c, t) * (c.influencer ? 6 : 1) * glazeAdj(s, c));
+  // the gh0st crew only posts through the storyline (undernet.ts), never generic takes
+  const crew = s.undernet?.crew;
+  const isCrew = (id: string) => !!crew && (crew.gh0st === id || crew.kid === id || crew.wren === id || crew.broker === id || crew.hype === id);
+  const author = o.author ?? rng.weighted(s.characters, (c) => (isCrew(c.id) ? 0 : c.activity * diurnal(c, t) * (c.influencer ? 6 : 1) * glazeAdj(s, c)));
   let topic: Topic | undefined = o.topic === null ? undefined : o.topic;
   if (o.topic === undefined) {
     const r = rng.next();
@@ -449,11 +467,25 @@ function drift(s: WorldState, rng: Rng | null, dt: number) {
   s.player.followers = Math.round(s.player.followers * (1 + 0.000015 * (s.player.influence / 50) * steps));
 }
 
+/** reactions that landed over an hour ago become plain counts (same display, a fraction of the bytes) */
+function settleReactions(s: WorldState) {
+  const cut = s.simTime - HOUR;
+  for (let i = s.messages.length - 1; i >= 0; i--) {
+    const m = s.messages[i];
+    if (!m.reactionLog?.length) continue;
+    const last = m.reactionLog[m.reactionLog.length - 1][1];
+    if (last > cut || m.t > cut) continue;
+    m.reactions = reactionsAt(m, Infinity);
+    delete m.reactionLog;
+  }
+}
+
 function prune(s: WorldState) {
+  settleReactions(s);
   const before = s.messages.length;
-  if (before > 9000) {
-    // keep the newest 6500 overall, plus each channel's last 40 and its 10 best older messages
-    const keep = new Set<string>(s.messages.slice(-6500).map((m) => m.id));
+  if (before > 7000) {
+    // keep the newest 5000 overall, plus each channel's last 40 and its 10 best older messages
+    const keep = new Set<string>(s.messages.slice(-5000).map((m) => m.id));
     const byCh = new Map<string, Message[]>();
     for (const m of s.messages) (byCh.get(m.channelId) ?? byCh.set(m.channelId, []).get(m.channelId)!).push(m);
     for (const list of byCh.values()) {
@@ -463,9 +495,14 @@ function prune(s: WorldState) {
     s.messages = s.messages.filter((m) => keep.has(m.id));
     s.stats.pruned += before - s.messages.length;
   }
-  if (s.posts.length > 2600) s.posts = s.posts.slice(-2200);
-  if (s.recentTexts.length > 600) s.recentTexts = s.recentTexts.slice(-600);
-  if (s.articles.length > 260) s.articles = s.articles.slice(-220);
+  if (s.posts.length > 2000) {
+    // keep the newest 1600 plus anything god wrote, liked or reposted (and the posts those reply to)
+    const tail = new Set(s.posts.slice(-1600));
+    const mine = new Set(s.posts.filter((p) => p.authorId === "god" || p.godLiked || p.godReposted).map((p) => p.id));
+    s.posts = s.posts.filter((p) => tail.has(p) || mine.has(p.id) || (p.replyTo && mine.has(p.replyTo)));
+  }
+  if (s.recentTexts.length > 700) s.recentTexts = s.recentTexts.slice(-600);
+  if (s.articles.length > 180) s.articles = s.articles.slice(-150);
   if (s.notifications.length > 160) s.notifications = s.notifications.slice(-140);
   if (s.player.history.length > 200) s.player.history = s.player.history.slice(-200);
   if (s.events.length > 40) s.events = s.events.filter((e) => !e.resolved).concat(s.events.filter((e) => e.resolved).slice(-20));
@@ -598,12 +635,30 @@ function leftOnRead(s: WorldState, t: number) {
 
 export interface SimProgress { done: number; total: number }
 
-/** Advance the world to `to`. Long gaps are compressed to the last MAX_FULL_SIM of full simulation. */
-export function simulate(s: WorldState, to: number, opts: { maxBuckets?: number } = {}): { compressed: boolean; processed: number } {
+/**
+ * Advance the world to `to`. Long absences are compressed so catch-up stays fast on a phone:
+ * - the last FULL_SIM is simulated bucket by bucket, so opening the app every 20 min or once after 6 h gives the
+ *   same world,
+ * - (after 24 h+ away only the last FULL_SIM_LONG is full)
+ * - the rest of the last 24 h is sampled at one bucket per 5 minutes: the 5-minute and hourly clocks (topics,
+ *   news, events, money, lives, pruning) stay exact while chatter is thinned to a highlight reel,
+ * - anything older is skipped analytically (money drift, topic decay, lives).
+ * `full` forces bucket-by-bucket (a new world's first hours of history).
+ */
+export const FULL_SIM = 6 * HOUR;
+export const FULL_SIM_LONG = 2 * HOUR; // after a day or more away: only the last 2 h in full
+const SPARSE_EVERY = 30; // buckets: 5 minutes
+/** a catch-up that started from a 24 h+ gap keeps its (shorter) full window across sliced calls */
+const longCatchUp = new WeakMap<WorldState, { target: number; from: number }>();
+export function simulate(s: WorldState, to: number, opts: { maxBuckets?: number; full?: boolean } = {}): { compressed: boolean; processed: number } {
   let compressed = false;
   const target = Math.floor(to / BUCKET);
   let b = Math.floor(s.simTime / BUCKET);
-  if ((target - b) * BUCKET > MAX_FULL_SIM) {
+  const memo = longCatchUp.get(s);
+  let fullFrom = opts.full ? b : memo && memo.target === target ? memo.from : target - FULL_SIM / BUCKET;
+  if (!opts.full && (target - b) * BUCKET > MAX_FULL_SIM) {
+    fullFrom = target - FULL_SIM_LONG / BUCKET;
+    longCatchUp.set(s, { target, from: fullFrom });
     const skipTo = target - MAX_FULL_SIM / BUCKET;
     const dt = (skipTo - b) * BUCKET;
     drift(s, null, dt);
@@ -617,11 +672,26 @@ export function simulate(s: WorldState, to: number, opts: { maxBuckets?: number 
   let processed = 0;
   const limit = opts.maxBuckets ?? Infinity;
   while (b < target && processed < limit) {
+    if (b < fullFrom && b % SPARSE_EVERY !== 0) {
+      // sparse stretch: jump to the next 5-minute mark (or the start of full simulation)
+      b = Math.min(fullFrom, Math.ceil((b + 1) / SPARSE_EVERY) * SPARSE_EVERY);
+      s.simTime = b * BUCKET;
+      compressed = true;
+      continue;
+    }
     processBucket(s, b);
     b++;
     processed++;
   }
   return { compressed, processed };
+}
+
+/** how many buckets a catch-up to `to` will actually process (for progress bars) */
+export function bucketsToSimulate(s: WorldState, to: number): number {
+  const target = Math.floor(to / BUCKET), b = Math.floor(s.simTime / BUCKET);
+  const full = Math.min(target - b, ((target - b) * BUCKET > MAX_FULL_SIM ? FULL_SIM_LONG : FULL_SIM) / BUCKET);
+  const sparse = Math.max(0, Math.min(target - b, MAX_FULL_SIM / BUCKET) - full);
+  return Math.max(1, full + Math.ceil(sparse / SPARSE_EVERY));
 }
 
 export interface CatchUpBaseline { from: number; simFrom: number; stats: WorldState["stats"]; opinion: number; events: number; netWorth: number; followers: number; compressed: boolean }
@@ -926,7 +996,7 @@ export function bootstrap(s: WorldState, now: number, hours = 3, opts: { defer?:
   for (let i = 0; i < 2; i++) { const c = celebPick(s, rng); s.topics.push(autoGodTopic(rng, nid(s, "t"), start, c.displayName, c.id)); }
   s.topics.push({ id: nid(s, "t"), tag: "GodCreativeMode", label: "the 'creative mode' post", about: "god", category: "viral", valence: 0.4, magnitude: 5, heat: 14, startedAt: start, subject: "life is easier on creative mode", facts: {} });
   spawnEvent(s, rng, start + HOUR);
-  if (!opts.defer) simulate(s, now);
+  if (!opts.defer) simulate(s, now, { full: true });
   s.lastSeenAt = now;
   return s;
 }

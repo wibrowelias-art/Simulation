@@ -2,12 +2,12 @@
 import { useSyncExternalStore } from "react";
 import { indexedDbKV, type KV } from "@/lib/persistence/kv";
 import { clearWorld, createProfile, deleteProfile, listProfiles, loadWorld, saveWorld, setPasscode, updateProfile, verifyPasscode, type Profile } from "@/lib/persistence/profiles";
-import { applyAction, baseline, bootstrap, godEdit, godPin, godPost, godPostAction, godReact, godSay, resolveEvent, simulate, summarize, type ActionInput, type RippleResult } from "@/lib/sim/engine";
+import { applyAction, baseline, bootstrap, bucketsToSimulate, godEdit, godPin, godPost, godPostAction, godReact, godSay, resolveEvent, simulate, summarize, type ActionInput, type RippleResult } from "@/lib/sim/engine";
 import { createWorld } from "@/lib/sim/world";
 import { godAbandonTyping, godJoinVoice, godLeaveVoice, godTyping, voiceChannels } from "@/lib/sim/presence";
 import { liveReply, pickLead } from "@/lib/live/client";
 import { ambientTick, liveMoment, liveScene, type SceneHooks } from "@/lib/live/scene";
-import { isIdle, noteActivity } from "@/lib/live/budget";
+import { idleFor, isIdle, noteActivity } from "@/lib/live/budget";
 import type { CatchUpSummary, PlatformId, Settings, WorldState } from "@/lib/sim/types";
 
 export type Phase = "boot" | "profiles" | "catchup" | "ready" | "elsewhere";
@@ -152,12 +152,12 @@ async function runCatchUp(w: WorldState, to: number, quiet = false) {
   try { await runCatchUpInner(w, to, quiet); } finally { catching = false; }
 }
 /** simulate up to `to` in ~12ms slices, yielding to the browser in between */
-async function sliced(w: WorldState, to: number, onSlice: (processed: number, compressed: boolean) => void) {
+async function sliced(w: WorldState, to: number, onSlice: (processed: number, compressed: boolean) => void, full = false) {
   for (;;) {
     const t0 = performance.now();
     let processed = 0, compressed = false;
     while (performance.now() - t0 < 12) {
-      const r = simulate(w, to, { maxBuckets: 12 });
+      const r = simulate(w, to, { maxBuckets: 12, full });
       compressed ||= r.compressed;
       processed += r.processed;
       if (!r.processed) break;
@@ -169,11 +169,11 @@ async function sliced(w: WorldState, to: number, onSlice: (processed: number, co
 }
 async function runCatchUpInner(w: WorldState, to: number, quiet = false) {
   const from = w.lastSeenAt;
-  const total = Math.max(1, Math.min(to - w.simTime, 24 * 3600e3) / 10_000);
+  const total = (w.simTime < from ? Math.max(0, (from - w.simTime) / 10_000) : 0) + bucketsToSimulate(w, to);
   let done = 0;
   const progress = (n: number) => { done += n; if (!quiet) set({ progress: Math.min(1, done / total) }); };
   // a brand-new world first builds its history up to the moment you "left"
-  if (w.simTime < from) await sliced(w, from, (n) => progress(n));
+  if (w.simTime < from) await sliced(w, from, (n) => progress(n), true);
   const base = baseline(w, from);
   await sliced(w, to, (n, c) => { if (c) base.compressed = true; progress(n); });
   w.lastSeenAt = to;
@@ -243,7 +243,9 @@ type Idle = (cb: () => void, o?: { timeout: number }) => number;
 function scheduleSave() {
   if (saveTimer || !dirty) return;
   // save when the browser is idle (at most every ~8s), never in the middle of an animation frame
-  saveTimer = setTimeout(() => {
+  saveTimer = setTimeout(function attempt(tries = 0) {
+    // never serialise the world under the player's fingers: wait for a pause in typing/scrolling (up to ~6 s)
+    if (idleFor(Date.now()) < 1200 && tries < 4) { saveTimer = setTimeout(() => attempt(tries + 1), 1500); return; }
     const ric = (globalThis as { requestIdleCallback?: Idle }).requestIdleCallback;
     if (ric) ric(() => { saveTimer = undefined; flush(); }, { timeout: 4000 });
     else { saveTimer = undefined; flush(); }

@@ -143,6 +143,12 @@ function pickCoreCast(rng: ReturnType<typeof rngFor>, characters: Character[], s
   }
 }
 
-export const charById = (s: WorldState, id: string) => s.characters[Number(id.slice(1))];
+// ids are "c<index>"; parsing them is hot (weighted picks), so remember each id's index
+const idIndex = new Map<string, number>();
+export const charById = (s: WorldState, id: string) => {
+  let i = idIndex.get(id);
+  if (i === undefined) { i = Number(id.slice(1)); if (idIndex.size < 5000) idIndex.set(id, i); }
+  return s.characters[i];
+};
 export const serverById = (s: WorldState, id: string) => s.servers.find((x) => x.id === id)!;
 export const netWorth = (s: WorldState) => s.player.cash + s.player.holdings.reduce((a, h) => a + h.value, 0);

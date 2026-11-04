@@ -476,10 +476,13 @@ function dmReply(s: WorldState, god: Message, p: ParsedGod, now: number) {
 
 /** two characters DM each other (often about god). @god can read everything. */
 export function ambientDm(s: WorldState, rng: Rng, t: number) {
-  const pool = s.characters.filter((c) => c.core && c.friends.length);
+  // the gh0st crew's DMs are story beats only (see undernet.ts), never small talk
+  const pool = s.characters.filter((c) => c.core && c.friends.length && !crewRole(s, c.id));
   if (!pool.length) return;
   const a = rng.weighted(pool, (c) => diurnal(c, t));
-  const b = charById(s, rng.pick(a.friends));
+  const pals = a.friends.filter((id) => !crewRole(s, id));
+  if (!pals.length) return;
+  const b = charById(s, rng.pick(pals));
   const chId = dmChannel(a.id, b.id);
   const { srv, ch } = DM_SERVER([a.id, b.id], chId);
   const tp = s.topics.filter((x) => x.about === "god" && x.heat > 1);
