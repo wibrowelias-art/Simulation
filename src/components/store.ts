@@ -4,12 +4,17 @@ import { indexedDbKV, type KV } from "@/lib/persistence/kv";
 import { clearWorld, createProfile, deleteProfile, listProfiles, loadWorld, saveWorld, setPasscode, updateProfile, verifyPasscode, type Profile } from "@/lib/persistence/profiles";
 import { applyAction, baseline, bootstrap, bucketsToSimulate, godEdit, godPin, godPost, godPostAction, godReact, godSay, resolveEvent, simulate, summarize, type ActionInput, type RippleResult } from "@/lib/sim/engine";
 import { createWorld } from "@/lib/sim/world";
+import { setupPlayer } from "@/lib/wallet/state";
+import { executeBuy, executeSell } from "@/lib/wallet/trade";
+import { sampleValue } from "@/lib/wallet/value";
+import { quoteOf } from "@/lib/market/client";
+import { tradeRipple } from "@/lib/wallet/world";
 import { dmChannel } from "@/lib/sim/godspeak";
 import { godAbandonTyping, godJoinVoice, godLeaveVoice, godTyping, voiceChannels } from "@/lib/sim/presence";
 import { liveReply, pickLead } from "@/lib/live/client";
 import { ambientTick, liveMoment, liveScene, type SceneHooks } from "@/lib/live/scene";
 import { idleFor, isIdle, noteActivity } from "@/lib/live/budget";
-import type { CatchUpSummary, PlatformId, Settings, WorldState } from "@/lib/sim/types";
+import type { CatchUpSummary, PlatformId, Settings, TradeFill, WorldState } from "@/lib/sim/types";
 
 export type Phase = "boot" | "profiles" | "catchup" | "ready" | "elsewhere";
 export type Summary = CatchUpSummary & { netWorthDelta: number; followerDelta: number };
@@ -95,7 +100,7 @@ export async function init() {
   const profiles = await listProfiles(kv);
   const params = new URLSearchParams(location.search);
   if (params.get("demo") !== null && !profiles.length) {
-    const p = await createProfile(kv, "God", undefined, params.get("seed") ?? "demo-universe");
+    const p = await createProfile(kv, "Alex", undefined, params.get("seed") ?? "demo-universe", { handle: "alex", start: "10000" });
     return openProfile(p, [p]);
   }
   const unlocked = sessionStorage.getItem(SESSION);
@@ -104,8 +109,8 @@ export async function init() {
   set({ phase: "profiles", profiles });
 }
 
-export async function newProfile(name: string, passcode?: string) {
-  const p = await createProfile(kv, name, passcode || undefined);
+export async function newProfile(name: string, passcode?: string, extra: { handle?: string; start?: string } = {}) {
+  const p = await createProfile(kv, name, passcode || undefined, undefined, extra);
   await openProfile(p, await listProfiles(kv));
 }
 
@@ -138,7 +143,8 @@ async function openProfile(p: Profile, profiles: Profile[]) {
     // brand-new universe: 3h of history, then (optionally) a pretend absence
     w = createWorld(p.seed, now - away);
     bootstrap(w, now - away, 3, { defer: true }); // history is simulated in small slices below
-    w.player.displayName = p.name;
+    w.wallet = undefined;
+    setupPlayer(w, { name: p.name, handle: p.handle ?? p.name, start: p.start, now });
   } else if (away && new URLSearchParams(location.search).get("demo") !== null) {
     w.lastSeenAt = Math.min(w.lastSeenAt, now - away);
   }
@@ -321,6 +327,19 @@ const quote = (t: string) => `"${t.length > 80 ? t.slice(0, 78) + "…" : t}"`;
 const chName = (w: WorldState, channelId: string) => w.servers.flatMap((x) => x.channels).find((c) => c.id === channelId)?.name ?? "the chat";
 const userOf = (w: WorldState, id: string) => (id.startsWith("c") ? w.characters[Number(id.slice(1))]?.username : undefined);
 
+/** paper trade at the latest live quote (virtual money only) */
+export function doTrade(side: "buy" | "sell", key: string, input: string): TradeFill | { error: string } | undefined {
+  return mutate((w, now) => {
+    const q = quoteOf(key);
+    if (!w.wallet) return { error: "No wallet." };
+    if (!q) return { error: "No live price for this token right now." };
+    const f = side === "buy" ? executeBuy(w.wallet, q.q, input, q.t, now) : executeSell(w.wallet, q.q, input, q.t, now);
+    if (!("error" in f)) { sampleValue(w, now, true); tradeRipple(w, f, now); }
+    return f;
+  });
+}
+export const doWallet = (fn: (w: WorldState, now: number) => void) => mutate((w, now) => fn(w, now));
+
 export const doEdit = (id: string, text: string) => {
   const old = st.world && findMsg(st.world, id)?.text;
   return withMoment((w, now) => godEdit(w, id, text, now), () => (old ? { text: `god edited his message from ${quote(old)} to ${quote(text)} and people noticed` } : undefined));
@@ -372,11 +391,13 @@ export function markRead(channelId: string) {
   readTimer = setTimeout(() => { readTimer = undefined; localStorage.setItem(`god-sim:read:${id}`, JSON.stringify(st.lastRead)); }, 3000);
 }
 
-export async function resetUniverse(newSeed?: string) {
+export async function resetUniverse(newSeed?: string, start?: string) {
   if (!st.profile) return;
   if (tick) clearInterval(tick);
   const p = st.profile;
-  if (newSeed) { p.seed = newSeed; await updateProfile(kv, p); }
+  if (newSeed) p.seed = newSeed;
+  if (start) p.start = start;
+  if (newSeed || start) await updateProfile(kv, p);
   await clearWorld(kv, p.id);
   localStorage.removeItem(`god-sim:read:${p.id}`);
   st.lastRead = {};
@@ -384,7 +405,8 @@ export async function resetUniverse(newSeed?: string) {
   const now = Date.now();
   const w = createWorld(p.seed, now);
   bootstrap(w, now, 3, { defer: true });
-  w.player.displayName = p.name;
+  w.wallet = undefined;
+  setupPlayer(w, { name: p.name, handle: p.handle ?? p.name, start: p.start, now });
   w.lastSeenAt = now;
   await runCatchUp(w, now);
 }

@@ -154,4 +154,16 @@ export function avatarSvg(style: PfpStyle, seed: number, name = "?"): string {
 export const avatarUri = (style: PfpStyle, seed: number, name?: string) => `data:image/svg+xml;utf8,${encodeURIComponent(avatarSvg(style, seed, name))}`;
 
 /** @god's avatar: gold crown sigil. */
-export const GOD_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3c4"/><stop offset=".5" stop-color="#e8b84a"/><stop offset="1" stop-color="#8a6416"/></linearGradient></defs><rect width="64" height="64" fill="#0a0a0f"/><path d="M14 42 L12 20 L23 30 L32 14 L41 30 L52 20 L50 42Z" fill="url(#gg)"/><rect x="14" y="44" width="36" height="6" rx="2" fill="url(#gg)"/><circle cx="32" cy="34" r="3" fill="#0a0a0f"/></svg>`)}`;
+/** the player's avatar: initials on the suite's lime (no crown: the player is a person, not a brand) */
+export const GOD_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#c6f432"/><circle cx="32" cy="25" r="11" fill="#0b0c0e"/><path d="M12 58c3-12 11-17 20-17s17 5 20 17Z" fill="#0b0c0e"/></svg>`)}`;
+const playerCache = new Map<string, string>();
+export function playerAvatar(name: string): string {
+  const k = name.trim() || "?";
+  let u = playerCache.get(k);
+  if (!u) {
+    const ini = k.split(/\s+/).map((w) => w[0]).join("").replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2).toUpperCase() || "?";
+    u = `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#c6f432"/><text x="32" y="41" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-weight="800" font-size="26" fill="#0b0c0e">${ini.replace(/[<&>"]/g, "")}</text></svg>`)}`;
+    playerCache.set(k, u);
+  }
+  return u;
+}

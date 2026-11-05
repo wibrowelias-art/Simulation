@@ -1,70 +1,90 @@
 "use client";
 import clsx from "clsx";
 import { useState } from "react";
-import { changePasscode, lock, resetUniverse, toast, updateSettings, useApp } from "../store";
-import { Section } from "../ui";
-import type { Settings } from "@/lib/sim/types";
+import { ChevronLeft } from "lucide-react";
+import { changePasscode, editWorld, lock, resetUniverse, toast, updateSettings, useApp } from "../store";
+import { Avatar, go, who } from "../ui";
 import { liveStatus } from "@/lib/live/client";
+import { START_OPTIONS, toHandle } from "@/lib/wallet/state";
+import { fmtUsd } from "@/lib/wallet/format";
+import { APP, SUITE } from "@/lib/brand";
 
-const THEMES: { id: Settings["theme"]; label: string; sw: string[] }[] = [
-  { id: "midnight", label: "Midnight", sw: ["#0b0d12", "#e8b84a", "#5865f2"] },
-  { id: "obsidian", label: "Obsidian", sw: ["#050505", "#d4d4d4", "#a3a3a3"] },
-  { id: "royal", label: "Royal", sw: ["#120b1e", "#e8b84a", "#a855f7"] },
-  { id: "terminal", label: "Terminal", sw: ["#050a06", "#3ddc84", "#f5a623"] },
-];
+export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} className="grid min-h-[44px] min-w-[52px] shrink-0 place-items-center">
+      <span className={clsx("relative h-[31px] w-[51px] rounded-full transition-colors", on ? "bg-accent" : "bg-[var(--surface-3)]")}>
+        <span className={clsx("absolute top-[2px] size-[27px] rounded-full bg-white shadow transition-transform", on ? "translate-x-[22px]" : "translate-x-[2px]")} />
+      </span>
+    </button>
+  );
+}
+const Group = ({ title, children, note }: { title?: string; children: React.ReactNode; note?: React.ReactNode }) => (
+  <section className="mt-6">
+    {title && <h2 className="mb-1.5 px-4 text-[13px] font-semibold uppercase text-muted">{title}</h2>}
+    <div className="divide-y divide-[var(--border)] overflow-hidden rounded-2xl bg-surface">{children}</div>
+    {note && <p className="mt-1.5 px-4 text-[13px] text-muted">{note}</p>}
+  </section>
+);
+const Row = ({ children, className }: { children: React.ReactNode; className?: string }) => <div className={clsx("flex min-h-[52px] items-center gap-3 px-4", className)}>{children}</div>;
 
 export function SettingsView() {
   const { world: w, profile } = useApp();
   const s = w!;
   const st = s.settings;
   const live = liveStatus();
+  const me = who(s, "god");
+  const [name, setName] = useState(s.player.displayName);
+  const [handle, setHandle] = useState(s.player.handle ?? "");
   const [pass, setPass] = useState("");
-  const [confirm, setConfirm] = useState(false);
-  const [seed, setSeed] = useState("");
-  const slider = (k: "activity" | "glazeRatio" | "drama", label: string, min: number, max: number, step: number, lo: string, hi: string) => (
-    <label className="block">
-      <div className="flex justify-between text-[13px]"><span className="font-semibold">{label}</span><span className="num text-gold">{k === "activity" ? `${st[k].toFixed(2)}×` : `${Math.round(st[k] * 100)}%`}</span></div>
-      <input type="range" min={min} max={max} step={step} value={st[k]} onChange={(e) => updateSettings({ [k]: Number(e.target.value) })} className="mt-2 w-full accent-[var(--gold)]" />
-      <div className="flex justify-between text-[11px] text-muted"><span>{lo}</span><span>{hi}</span></div>
-    </label>
-  );
+  const [reset, setReset] = useState<string>();
+  const saveId = () => {
+    const h = toHandle(handle || name);
+    editWorld((x) => { x.player.displayName = name.trim().slice(0, 32) || x.player.displayName; x.player.handle = h; });
+    setHandle(h);
+    toast("Profile saved");
+  };
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-2xl space-y-4 p-3 md:p-6">
-        <h1 className="text-[24px] font-black">Settings</h1>
-        <Section title="World">
-          <div className="space-y-5">
-            {slider("activity", "World activity", 0.25, 3, 0.05, "sleepy", "chaos")}
-            {slider("glazeRatio", "Glaze ratio", 0, 1, 0.01, "everyone hates you", "everyone worships you")}
-            {slider("drama", "Drama level", 0, 1, 0.01, "wholesome", "messy")}
-          </div>
-        </Section>
-        <Section title="Conversations">
-          <label className="flex items-start gap-2 text-[14px]"><input className="mt-1" type="checkbox" checked={st.liveReplies !== false} onChange={(e) => updateSettings({ liveReplies: e.target.checked })} />
-            <span>Live replies<span className="block text-[12px] text-muted">When you talk to someone, they write a new reply with a language model on our server, using the recent chat. Off: built-in lines only. Background chatter always uses built-in lines.{live.state === "unavailable" ? " Live replies are not available right now, so built-in lines are used." : ""}</span></span></label>
-          <label className="mt-3 flex items-start gap-2 text-[14px]"><input className="mt-1" type="checkbox" checked={!!st.breakCharacter} onChange={(e) => updateSettings({ breakCharacter: e.target.checked })} />
-            <span>Let people break character<span className="block text-[12px] text-muted">If you sincerely ask someone whether they are an AI, they may say yes.</span></span></label>
-        </Section>
-        <Section title="Appearance">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {THEMES.map((t) => <button key={t.id} onClick={() => updateSettings({ theme: t.id })} className={clsx("rounded-xl border p-3 text-left", st.theme === t.id ? "border-gold" : "border-line")}><div className="mb-2 flex gap-1">{t.sw.map((c) => <span key={c} className="size-4 rounded-full border border-white/10" style={{ background: c }} />)}</div><div className="text-[13px] font-semibold">{t.label}</div></button>)}
-          </div>
-          <label className="mt-4 flex items-center gap-2 text-[14px]"><input type="checkbox" checked={st.reducedMotion} onChange={(e) => updateSettings({ reducedMotion: e.target.checked })} /> Reduce motion</label>
-        </Section>
-        <Section title={`Profile · ${profile?.name ?? ""}`}>
-          <p className="mb-2 text-[13px] text-muted">Profiles live only in this browser (IndexedDB). A passcode is stored as a salted SHA-256 hash. It keeps casual snoopers out; it is not real security.</p>
-          <div className="flex gap-2"><input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder={profile?.passHash ? "New passcode" : "Set a passcode"} className="input flex-1" />
-            <button onClick={async () => { await changePasscode(pass || null); setPass(""); toast(pass ? "Passcode set" : "Passcode removed"); }} className="btn">{pass ? "Save" : "Remove"}</button></div>
-          <button onClick={lock} className="btn mt-3">Lock & switch profile</button>
-        </Section>
-        <Section title="Danger zone">
-          <p className="mb-2 text-[13px] text-muted">Reset the universe: new characters, servers and history. Your empire starts over.</p>
-          <input value={seed} onChange={(e) => setSeed(e.target.value)} placeholder={`Seed (current: ${s.seed})`} className="input mb-2 w-full" />
-          {confirm ? (
-            <div className="flex gap-2"><button onClick={() => resetUniverse(seed.trim() || `u-${Date.now().toString(36)}`)} className="btn border-down bg-down/20 text-down">Yes, reset everything</button><button onClick={() => setConfirm(false)} className="btn">Cancel</button></div>
-          ) : <button onClick={() => setConfirm(true)} className="btn text-down">Reset universe</button>}
-        </Section>
-        <p className="pb-6 text-center text-[11px] text-muted">About: a fictional world. Every person, company, platform, outlet and event is invented.</p>
+    <div className="h-full overflow-y-auto bg-bg">
+      <div className="mx-auto max-w-[640px] px-4 pb-10 pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <header className="flex items-center gap-1 py-1">
+          <button aria-label="Back" onClick={() => (history.length > 1 ? history.back() : go("/"))} className="grid size-11 place-items-center rounded-full text-[var(--header)]"><ChevronLeft className="size-7" /></button>
+          <h1 className="text-[28px] font-extrabold text-[var(--header)]">Settings</h1>
+        </header>
+
+        <Group title="Profile">
+          <Row className="py-3"><Avatar src={me.avatar} size={52} /><span className="min-w-0"><span className="block truncate text-[17px] font-semibold text-[var(--header)]">{me.name}</span><span className="block text-[14px] text-muted">@{me.handle}</span></span></Row>
+          <Row><label className="flex flex-1 items-center gap-3"><span className="w-24 text-[16px] text-fg">Name</span><input value={name} onChange={(e) => setName(e.target.value)} className="min-h-[44px] min-w-0 flex-1 bg-transparent text-right text-[16px] text-fg outline-none" /></label></Row>
+          <Row><label className="flex flex-1 items-center gap-3"><span className="w-24 text-[16px] text-fg">Handle</span><span className="ml-auto text-muted">@</span><input value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^\w.]/g, ""))} className="min-h-[44px] w-40 bg-transparent text-[16px] text-fg outline-none" /></label></Row>
+          <Row><button onClick={saveId} className="min-h-[44px] w-full text-left text-[16px] font-semibold text-accent">Save profile</button></Row>
+        </Group>
+
+        <Group title="People" note={live.state === "unavailable" ? "Live replies aren't available on this server right now, so people use their built-in lines." : "People write new replies with a language model on the server, using the recent chat and what they remember about you."}>
+          <Row><span className="flex-1 text-[16px] text-fg">Live replies</span><Switch on={st.liveReplies !== false} onChange={(v) => updateSettings({ liveReplies: v })} label="Live replies" /></Row>
+          <Row><span className="flex-1 text-[16px] text-fg">Let people break character<span className="block text-[13px] text-muted">If you sincerely ask whether they&apos;re an AI, they may say yes.</span></span><Switch on={!!st.breakCharacter} onChange={(v) => updateSettings({ breakCharacter: v })} label="Let people break character" /></Row>
+        </Group>
+
+        <Group title="Display">
+          <Row><span className="flex-1 text-[16px] text-fg">Reduce motion</span><Switch on={st.reducedMotion} onChange={(v) => updateSettings({ reducedMotion: v })} label="Reduce motion" /></Row>
+        </Group>
+
+        <Group title="Privacy" note="Everything is stored only in this browser. A passcode keeps casual snoopers out; it isn't real security.">
+          <Row><input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder={profile?.passHash ? "New passcode" : "Set a passcode"} aria-label="Passcode" className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] text-fg outline-none placeholder:text-muted" />
+            <button onClick={async () => { await changePasscode(pass || null); setPass(""); toast(pass ? "Passcode set" : "Passcode removed"); }} className="min-h-[44px] px-1 text-[16px] font-semibold text-accent">{pass ? "Save" : profile?.passHash ? "Remove" : ""}</button></Row>
+          <Row><button onClick={lock} className="min-h-[44px] w-full text-left text-[16px] text-fg">Lock and switch profile</button></Row>
+        </Group>
+
+        <Group title="Start over" note="A new world: new people, new history, and your wallet resets to the amount you pick.">
+          {reset === undefined
+            ? <Row><button onClick={() => setReset("10000")} className="min-h-[44px] w-full text-left text-[16px] text-down">Reset everything…</button></Row>
+            : <>
+              <Row className="flex-wrap gap-2 py-3">{START_OPTIONS.map((o) => <button key={o} aria-pressed={reset === o} onClick={() => setReset(o)} className={clsx("min-h-[44px] rounded-full px-4 text-[15px] font-semibold", reset === o ? "bg-accent text-accent-ink" : "bg-[var(--surface-3)] text-fg")}>{fmtUsd(o).replace(".00", "")}</button>)}</Row>
+              <Row><button onClick={() => resetUniverse(`u-${Date.now().toString(36)}`, reset)} className="min-h-[44px] flex-1 text-left text-[16px] font-semibold text-down">Reset with {fmtUsd(reset).replace(".00", "")}</button><button onClick={() => setReset(undefined)} className="min-h-[44px] px-1 text-[16px] text-muted">Cancel</button></Row>
+            </>}
+        </Group>
+
+        <Group title="About">
+          <Row className="py-3"><p className="text-[14px] leading-relaxed text-muted">{SUITE} is a fictional world. Every person, company, outlet and event in {APP.lounge.name} and {APP.feed.name} is invented. Prices in {APP.trade.name} are real market data from DEX Screener and GeckoTerminal; all money, balances and trades are virtual, and nothing connects to a real wallet or exchange.</p></Row>
+        </Group>
       </div>
     </div>
   );

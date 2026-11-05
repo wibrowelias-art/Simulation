@@ -2,11 +2,13 @@
 import clsx from "clsx";
 import { MemeImage } from "../MemeImage";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, AtSign, Bell, ChevronDown, ChevronLeft, ChevronRight, Copy, Crown, Feather, Globe2, Headphones, HeadphoneOff, LayoutDashboard, Lock, Mic, MicOff, Newspaper, PhoneOff, Plus, Settings as Cog, Smile, Volume2, Eye, Hash, Megaphone, MessageCircle, MessagesSquare, Pencil, Pin, Reply, Search, Send, SmilePlus, Trash2, Users, X, Zap } from "lucide-react";
+import { ArrowDown, AtSign, Bell, ChevronDown, ChevronLeft, ChevronRight, Copy, Crown, Headphones, HeadphoneOff, Home as HomeIcon, Lock, Mic, MicOff, Newspaper, PhoneOff, Plus, Settings as Cog, Smile, Volume2, Eye, Hash, Megaphone, MessageCircle, MessagesSquare, Pencil, Pin, Reply, Search, Send, SmilePlus, Trash2, Users, X } from "lucide-react";
 import type { Route } from "../App";
 import { haptic } from "../App";
 import { doDelete, doEdit, doJoinVoice, doLeaveVoice, doPin, doReact, doSay, doStopTyping, doTyping, editWorld, lock, markRead, setFocus, toast, useApp } from "../store";
-import { linkTo } from "./Alerts";
+import { linkTo } from "../links";
+import { AppMark } from "../brand";
+import { APP } from "@/lib/brand";
 import { overheardAt, speaking, voiceChannels, voiceRoster } from "@/lib/sim/presence";
 import { Avatar, NameLine, RichText, go, who } from "../ui";
 import { channelMessages, dmThreads, isEdited, localHour, pinnedIn, reactionsAt, textAt, threadMessages, typingIn, unreadIndex, type UnreadInfo } from "@/lib/sim/engine";
@@ -164,15 +166,18 @@ function TabBar({ s, tab, now, unread, dms }: { s: WorldState; tab: Tab; now: nu
   );
 }
 
-/* the rest of the GOD internet, from the crown at the top of the server rail */
-const APPS: [string, string, typeof Bell][] = [["/chirp", "Chirp", Feather], ["/platforms", "Platforms", Globe2], ["/news", "News", Newspaper], ["/dashboard", "Empire", LayoutDashboard], ["/god", "GOD MODE", Crown], ["/events", "Events", Zap], ["/search", "Search", Search], ["/alerts", "Alerts", Bell], ["/settings", "Settings", Cog]];
-
+/* the other apps, from the button at the top of the server rail and from the You tab */
 function AppGrid({ onPick }: { onPick?: () => void }) {
+  const items: [string, React.ReactNode, string][] = [
+    ["/", <span key="h" className="grid size-11 place-items-center rounded-[11px] bg-[var(--surface-3)] text-[var(--header)]"><HomeIcon className="size-6" /></span>, "Home"],
+    ...(["wallet", "trade", "feed"] as const).map((id) => [APP[id].route, <AppMark key={id} app={id} size={44} />, APP[id].name] as [string, React.ReactNode, string]),
+    ["/settings", <span key="s" className="grid size-11 place-items-center rounded-[11px] bg-[var(--surface-3)] text-[var(--header)]"><Cog className="size-6" /></span>, "Settings"],
+  ];
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {APPS.map(([href, label, I]) => (
-        <button key={href} onClick={() => { haptic(5); onPick?.(); go(href); }} className={clsx("flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl bg-[var(--chat)] text-[13px] font-semibold active:scale-95", label === "GOD MODE" && "text-gold")}>
-          <I className="size-5" />{label}
+    <div className="grid grid-cols-5 gap-1">
+      {items.map(([href, icon, label]) => (
+        <button key={href} onClick={() => { haptic(5); onPick?.(); go(href); }} className="flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl text-[12px] font-semibold text-fg active:scale-95">
+          {icon}{label}
         </button>
       ))}
     </div>
@@ -188,10 +193,10 @@ function AppSheet({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
-      <div role="dialog" aria-label="GOD apps" onClick={(e) => e.stopPropagation()} className="sheet-spring absolute inset-x-0 bottom-0 rounded-t-2xl bg-surface p-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:left-1/2 md:w-[420px] md:-translate-x-1/2 md:rounded-2xl">
+      <div role="dialog" aria-label="Apps" onClick={(e) => e.stopPropagation()} className="sheet-spring absolute inset-x-0 bottom-0 rounded-t-2xl bg-surface p-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:left-1/2 md:w-[420px] md:-translate-x-1/2 md:rounded-2xl">
         <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-[var(--surface-3)]" />
         <div className="mb-3 flex items-center justify-between px-1">
-          <span className="flex items-center gap-2 text-[17px] font-bold text-[var(--header)]"><Crown className="size-5 text-gold" />The rest of the internet</span>
+          <span className="text-[17px] font-bold text-[var(--header)]">Apps</span>
           <button aria-label="Close" onClick={onClose} className="grid size-11 place-items-center rounded-full bg-[var(--surface-3)]"><X className="size-4" /></button>
         </div>
         <AppGrid onPick={onClose} />
@@ -213,12 +218,12 @@ function ServerRail({ s, srvId, chId, unread, dms, onApps }: { s: WorldState; sr
   return (
     <div className="no-scrollbar flex w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-bg py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
       {/* phones: the crown opens the rest of GOD (Messages has its own tab); desktop: direct messages, like chat apps */}
-      <button aria-label="GOD apps" onClick={() => { haptic(5); onApps(); }} className="group relative flex w-full justify-center active:scale-95 md:hidden">
-        <span className="grid size-12 place-items-center rounded-[16px] bg-gradient-to-br from-[#fff3c4] via-gold to-[#8a6416] text-[#120c02]"><Crown className="size-6" /></span>
+      <button aria-label="Apps" onClick={() => { haptic(5); onApps(); }} className="group relative flex w-full justify-center active:scale-95 md:hidden">
+        <AppMark app="lounge" size={48} />
       </button>
       <button aria-label={`Direct messages${dmMentions ? `, ${dmMentions} unread` : ""}`} onClick={() => go("/lounge/dm")} className="group relative flex w-full justify-center active:scale-95 max-md:hidden">
         <span className={clsx("absolute left-0 top-1/2 w-1 -translate-y-1/2 rounded-r-full bg-[var(--header)] transition-all duration-200", srvId === "dm" ? "h-9" : "h-0 group-hover:h-5")} />
-        <span className={clsx("grid size-12 place-items-center bg-gradient-to-br from-[#fff3c4] via-gold to-[#8a6416] text-[#120c02] transition-all duration-200", srvId === "dm" ? "rounded-[16px]" : "rounded-[24px] group-hover:rounded-[16px]")}><Crown className="size-6" /></span>
+        <span className={clsx("grid size-12 place-items-center bg-accent text-accent-ink transition-all duration-200", srvId === "dm" ? "rounded-[16px]" : "rounded-[24px] group-hover:rounded-[16px]")}><MessageCircle className="size-6" /></span>
         {dmMentions > 0 && <span className="absolute bottom-0 right-2"><Pill n={dmMentions} mention /></span>}
       </button>
       <div className="h-0.5 w-8 rounded-full bg-[var(--surface-3)]" />
@@ -496,7 +501,7 @@ function YouScreen({ s }: { s: WorldState }) {
   const me = who(s, "god");
   return (
     <section className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-surface">
-      <div className="relative h-[120px] shrink-0 bg-gradient-to-br from-[#fff3c4] via-gold to-[#8a6416] pt-[env(safe-area-inset-top)]">
+      <div className="relative h-[120px] shrink-0 bg-gradient-to-br from-accent to-[#5d8a00] pt-[env(safe-area-inset-top)]">
         <button aria-label="Settings" onClick={() => go("/settings")} className="absolute right-3 top-[max(0.5rem,env(safe-area-inset-top))] grid size-11 place-items-center rounded-full bg-black/35 text-white"><Cog className="size-5" /></button>
       </div>
       <div className="px-4">
@@ -513,7 +518,7 @@ function YouScreen({ s }: { s: WorldState }) {
             <div><div className="text-[16px] font-bold text-[var(--header)]">{Math.round(s.player.influence)}</div><div className="text-[12px] text-muted">Influence</div></div>
           </div>
         </div>
-        <div className="mb-2 mt-4 text-[12px] font-bold uppercase text-muted">The rest of the internet</div>
+        <div className="mb-2 mt-4 text-[12px] font-bold uppercase text-muted">Apps</div>
         <AppGrid />
         <button onClick={() => lock()} className="mb-6 mt-2 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[var(--chat)] text-[14px] font-semibold text-muted"><Lock className="size-4" />Switch profile</button>
       </div>

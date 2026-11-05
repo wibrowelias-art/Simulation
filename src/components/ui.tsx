@@ -1,7 +1,7 @@
 "use client";
 import clsx from "clsx";
 import { BadgeCheck, Shield, Bot } from "lucide-react";
-import { avatarUri, GOD_AVATAR } from "@/lib/sim/avatar";
+import { avatarUri, playerAvatar } from "@/lib/sim/avatar";
 import { STANCE_INFO } from "@/lib/sim/characters";
 import type { Character, WorldState } from "@/lib/sim/types";
 import { fmtMoney } from "@/lib/sim/format";
@@ -28,7 +28,7 @@ export interface Who {
 const BOT_AV = (label: string, color: string) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="${color}"/><text x="32" y="41" font-family="sans-serif" font-size="26" font-weight="700" text-anchor="middle" fill="#fff">${label}</text></svg>`)}`;
 
 export function who(s: WorldState, id: string): Who {
-  if (id === "god") return { id, name: s.player.displayName || "God", handle: "god", avatar: GOD_AVATAR, verified: true, kind: "god" };
+  if (id === "god") return { id, name: s.player.displayName || "You", handle: s.player.handle ?? "god", avatar: playerAvatar(s.player.displayName || "You"), verified: false, kind: "god" };
   if (id.startsWith("o-")) {
     const o = s.outlets.find((x) => x.id === id.slice(2));
     return { id, name: o?.name ?? "News", handle: (o?.short ?? "news").toLowerCase(), avatar: BOT_AV(o?.short.slice(0, 2) ?? "N", o?.color ?? "#444"), verified: true, kind: "outlet", color: o?.color };
@@ -97,13 +97,19 @@ export function Section({ title, right, children, className }: { title: React.Re
 }
 
 /** Text with @mentions, #tags and $TICKERS highlighted. */
-export function RichText({ text, onTag, onUser }: { text: string; onTag?: (t: string) => void; onUser?: (h: string) => void }) {
+/** the player's handle: the engine mentions the player as "@god" internally; everything visible shows the handle */
+let playerHandle = "god";
+export const setPlayerHandle = (h: string) => { playerHandle = h || "god"; };
+export const showHandle = (text: string) => (playerHandle === "god" ? text : text.replace(/@god\b/gi, `@${playerHandle}`));
+
+export function RichText({ text: raw, onTag, onUser }: { text: string; onTag?: (t: string) => void; onUser?: (h: string) => void }) {
+  const text = showHandle(raw);
   const parts = text.split(/(@[\w.]+|#[\w]+|\$[A-Z0-9]{2,})/g);
   return (
     <>
       {parts.map((p, i) =>
         i % 2 === 0 ? p : p.startsWith("@") ? (
-          <button key={i} onClick={(e) => { e.stopPropagation(); onUser?.(p.slice(1)); }} className={clsx("rounded px-0.5 font-medium", p.toLowerCase() === "@god" ? "bg-gold/15 text-gold" : "bg-brand/15 text-brand")}>{p}</button>
+          <button key={i} onClick={(e) => { e.stopPropagation(); onUser?.(p.slice(1)); }} className={clsx("rounded px-0.5 font-medium", p.toLowerCase() === `@${playerHandle}`.toLowerCase() ? "bg-accent/15 text-accent" : "bg-brand/15 text-brand")}>{p}</button>
         ) : (
           <button key={i} onClick={(e) => { e.stopPropagation(); onTag?.(p.replace(/^[#$]/, "")); }} className="text-brand hover:underline">{p}</button>
         ),

@@ -1,56 +1,26 @@
 @import "tailwindcss";
 
 :root,
-[data-theme="midnight"] {
-  --bg: #08090d;
-  --surface: #0f1117;
-  --surface-2: #161923;
-  --surface-3: #1d2130;
-  --border: #222636;
-  --text: #e8e9ee;
-  --muted: #8b90a1;
-  --up: #2bd17e;
-  --down: #f2555f;
-  --sim: #f0b429;
-  --brand: #7d8cff;
-  --gold: #e8b84a;
-  --glow: 125 140 255;
-}
-[data-theme="obsidian"] {
-  --bg: #050505;
-  --surface: #0d0d0d;
-  --surface-2: #151515;
-  --surface-3: #1c1c1c;
-  --border: #262626;
-  --text: #ededed;
-  --muted: #8f8f8f;
-  --brand: #a3a3ff;
-  --gold: #d4af6a;
-  --glow: 212 175 106;
-}
-[data-theme="royal"] {
-  --bg: #0b0714;
-  --surface: #130d22;
-  --surface-2: #1b1330;
-  --surface-3: #241a3e;
-  --border: #2e2248;
-  --text: #efe9fb;
-  --muted: #a397bd;
-  --brand: #b48cff;
-  --gold: #f2c45a;
-  --glow: 180 140 255;
-}
-[data-theme="terminal"] {
-  --bg: #040806;
-  --surface: #08100b;
-  --surface-2: #0d1811;
-  --surface-3: #122117;
-  --border: #1a2e20;
-  --text: #d7f5e0;
-  --muted: #7fa58b;
-  --brand: #3ee07f;
-  --gold: #f5c84c;
-  --glow: 62 224 127;
+[data-theme] {
+  /* one design system for the whole suite (docs/design.md) */
+  --bg: #0b0c0e;
+  --surface: #141518;
+  --surface-2: #1b1d21;
+  --surface-3: #23262b;
+  --border: #2a2d33;
+  --text: #eceef1;
+  --muted: #8b919b;
+  --header: #ffffff;
+  --accent: #c6f432;
+  --accent-ink: #0b0c0e;
+  --up: #3ddc84;
+  --down: #ff5a5f;
+  --warn: #ffb020;
+  --sim: #ffb020;
+  /* older component classes (gold/brand) now mean "the accent" */
+  --brand: #c6f432;
+  --gold: #c6f432;
+  --glow: 198 244 50;
 }
 
 @theme inline {
@@ -66,6 +36,9 @@
   --color-sim: var(--sim);
   --color-brand: var(--brand);
   --color-gold: var(--gold);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-warn: var(--warn);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -83,9 +56,11 @@ body {
   font-feature-settings: "cv11" 1;
   overscroll-behavior: none;
 }
+/* numbers: the regular typeface with tabular figures (money apps don't use monospace) */
 .num {
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
 }
 .panel {
   background: var(--surface);
@@ -97,10 +72,7 @@ body {
   backdrop-filter: blur(14px);
 }
 .gold-text {
-  background: linear-gradient(100deg, #fff3c4, var(--gold) 45%, #9a7020);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--accent);
 }
 .glow {
   box-shadow: 0 0 0 1px rgb(var(--glow) / 0.25), 0 10px 40px -10px rgb(var(--glow) / 0.35);
@@ -120,11 +92,11 @@ body {
 .btn:hover { background: color-mix(in oklab, var(--surface-3) 70%, var(--brand) 12%); }
 .btn:active { transform: scale(0.97); }
 .btn-gold {
-  background: linear-gradient(180deg, #f3d27a, #c9961a);
-  color: #1a1204;
-  border-color: #f3d27a55;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
 }
-.btn-gold:hover { background: linear-gradient(180deg, #f7dc92, #d6a22a); }
+.btn-gold:hover { filter: brightness(1.06); }
 .input {
   width: 100%;
   background: var(--surface-2);
@@ -195,30 +167,27 @@ body {
    Chat-app geometry and a neutral dark palette (familiar to anyone who uses community chat apps),
    with the Lounge's own gold accent and logo. Scoped so the rest of the app keeps its theme. */
 .lounge {
-  --bg: #1e1f22;        /* server rail */
-  --surface: #2b2d31;   /* channel drawer, member list, sheets */
-  --surface-2: #35373c; /* hover */
-  --surface-3: #383a40; /* inputs, chips */
-  --chat: #313338;      /* message pane */
-  --chat-hover: #2e3035;
-  --selected: #404249;
-  --border: #3f4147;
-  --text: #dbdee1;
-  --muted: #949ba4;
-  --header: #f2f3f5;
-  --up: #23a55a;
-  --down: #f23f43;
-  --idle: #f0b232;
-  --mention: rgb(240 178 50 / 0.08);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --bg: #0b0c0e;        /* server rail */
+  --surface: #141518;   /* lists, sheets */
+  --surface-2: #1b1d21; /* hover */
+  --surface-3: #23262b; /* inputs, chips */
+  --chat: #101114;      /* message pane */
+  --chat-hover: #15171a;
+  --selected: #23262b;
+  --border: #2a2d33;
+  --text: #dfe2e6;
+  --muted: #8b919b;
+  --header: #ffffff;
+  --idle: #ffb020;
+  --mention: rgb(198 244 50 / 0.07);
 }
 .lounge .chat-pane { background: var(--chat); }
 .lounge .msg-row:hover { background: var(--chat-hover); }
 .lounge .msg-text { color: var(--text); font-size: 16px; line-height: 1.375; }
 @media (min-width: 768px) { .lounge .msg-text { font-size: 15px; } }
 .lounge .msg-name { color: var(--header); font-size: 16px; font-weight: 600; line-height: 1.25; }
-.lounge .mention-row { background: var(--mention); box-shadow: inset 2px 0 0 var(--idle); }
-.lounge .mention-row:hover { background: rgb(240 178 50 / 0.12); }
+.lounge .mention-row { background: var(--mention); box-shadow: inset 2px 0 0 var(--accent); }
+.lounge .mention-row:hover { background: rgb(198 244 50 / 0.11); }
 /* reply spine: the little curved line from a reply to the message above */
 .reply-spine { position: relative; }
 .reply-spine::before { content: ""; position: absolute; left: -30px; top: 50%; width: 26px; height: 12px; border-left: 2px solid #4e5058; border-top: 2px solid #4e5058; border-top-left-radius: 6px; }
@@ -234,3 +203,9 @@ body {
 .sheet-spring { animation: sheet-spring 0.36s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
 [data-motion="reduced"] .sheet-spring { animation: none; }
 @media (prefers-reduced-motion: reduce) { .sheet-spring { animation: none; } }
+
+/* loading skeletons (shown in the final layout, never spinners in content) */
+@keyframes skeleton { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+.skeleton { background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: skeleton 1.2s linear infinite; }
+[data-motion="reduced"] .skeleton { animation: none; }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }

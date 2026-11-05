@@ -1,11 +1,12 @@
 import { installUndernet } from "./undernet";
+import { setupPlayer } from "../wallet/state";
 import { rngFor } from "./rng";
 import type { Character, Server, WorldState } from "./types";
 import { makeCharacter } from "./characters";
 import { CELEB_FIELDS } from "./data";
 import { OUTLETS, SERVER_DEFS } from "./servers";
 
-export const WORLD_VERSION = 8;
+export const WORLD_VERSION = 9;
 export const CORE_CAST = 36;
 export const CHARACTER_COUNT = 380;
 
@@ -78,6 +79,7 @@ export function createWorld(seed: string, now: number): WorldState {
     counter: 0, stats: { messages: 0, posts: 0, articles: 0, pruned: 0 }, recentTexts: [], pending: [], bus: [], godLog: [],
   };
   installUndernet(w, now);
+  setupPlayer(w, { now });
   return w;
 }
 
@@ -102,6 +104,8 @@ export function migrateWorld(w: WorldState): WorldState | undefined {
     const mem = (c.mem ??= []);
     if (!mem.some((m) => m.text === f)) mem.push({ about: "god", text: f, t: w.simTime, w: 0.9 });
   }
+  // v9: the player gets a handle and virtual money (wallet + paper trading). Old saves start with the default stake.
+  if (w.version < 9) setupPlayer(w, { now: w.simTime || Date.now() });
   w.version = WORLD_VERSION;
   return w;
 }

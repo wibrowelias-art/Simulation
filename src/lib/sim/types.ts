@@ -244,6 +244,7 @@ export interface Holding {
 export interface Player {
   username: string;
   displayName: string;
+  handle?: string; // what everyone sees (@handle); the internal author id stays "god"
   cash: number;
   holdings: Holding[];
   followers: number;
@@ -337,6 +338,37 @@ export interface WorldState {
   undernet?: UndernetState; // the gh0st storyline (fiction only)
   voice?: VoiceState; // fictional voice lounge presence
   godMoments?: GodMoment[]; // god's interactions (typing, reactions, voice) for the away recap
+  wallet?: WalletState; // the player's virtual money: Lanternfish (wallet) and Kiteline (paper trading)
+}
+
+/* ---------------------------------------------------------------- virtual money (never real) */
+
+/** a token is identified by chain + contract, never by ticker */
+export interface TokenRef { chain: string; address: string; symbol: string; name: string; icon?: string; pair?: string }
+export interface WalletAccount { id: string; name: string; hue: number }
+/** an open position; amounts and money are decimal strings (decimal.js), USD is virtual */
+export interface Position extends TokenRef { account: string; amount: string; cost: string; opened: number }
+export interface TradeFill extends TokenRef {
+  id: string; t: number; account: string; side: "buy" | "sell";
+  amount: string; price: string; usd: string; fee: string; impactBps: number;
+  pnl?: string; // realised on sells
+}
+export interface Transfer {
+  id: string; t: number; account: string; dir: "in" | "out";
+  symbol: string; chain?: string; address?: string; amount: string; usd: string;
+  peer: string; // character id
+  memo?: string;
+}
+export interface WalletState {
+  start: string; // starting virtual cash chosen at setup
+  cash: Record<string, string>; // per account, virtual USD
+  accounts: WalletAccount[];
+  active: string;
+  positions: Position[];
+  fills: TradeFill[];
+  transfers: Transfer[];
+  history: [t: number, usd: number][]; // portfolio value samples for the balance chart
+  watch: TokenRef[];
 }
 
 export type CrewRole = "gh0st" | "kid" | "wren" | "broker" | "hype";

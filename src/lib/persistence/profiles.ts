@@ -14,6 +14,8 @@ export interface Profile {
   createdAt: number;
   salt?: string;
   passHash?: string;
+  handle?: string; // chosen at setup
+  start?: string; // starting virtual cash chosen at setup
 }
 
 const PROFILES = "profiles";
@@ -30,8 +32,8 @@ export async function listProfiles(kv: KV): Promise<Profile[]> {
   return (await kv.get<Profile[]>(PROFILES)) ?? [];
 }
 
-export async function createProfile(kv: KV, name: string, passcode?: string, seed?: string): Promise<Profile> {
-  const p: Profile = { id: randomHex(6), name: name.trim() || "God", seed: seed ?? randomHex(8), createdAt: Date.now() };
+export async function createProfile(kv: KV, name: string, passcode?: string, seed?: string, extra: { handle?: string; start?: string } = {}): Promise<Profile> {
+  const p: Profile = { id: randomHex(6), name: name.trim() || "Player", seed: seed ?? randomHex(8), createdAt: Date.now(), ...extra };
   if (passcode) await setPasscode(p, passcode);
   await kv.set(PROFILES, [...(await listProfiles(kv)), p]);
   return p;
