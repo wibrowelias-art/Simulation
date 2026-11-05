@@ -44,7 +44,7 @@ if (memeRow) {
   await page.keyboard.press("Escape"); await wait(300);
   report.lightboxClosed = !(await page.locator('[role="dialog"][aria-label="Image"]').count());
 }
-await page.evaluate(() => { location.hash = "#/chirp"; }); await wait(2000);
+await page.evaluate(() => { location.hash = "#/feed"; }); await wait(2000);
 const chirpMeme = page.locator("[data-meme]").first();
 report.chirpMeme = await chirpMeme.count() > 0;
 if (report.chirpMeme) { await chirpMeme.scrollIntoViewIfNeeded(); await wait(400); await page.screenshot({ path: `${OUT}live-meme-chirp.png` }); }

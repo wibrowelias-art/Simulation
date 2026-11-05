@@ -77,7 +77,7 @@ function WalletHome({ s, now }: { s: WorldState; now: number }) {
         </div>
       </div>
       <div className="-mx-4 mt-3"><PriceChart points={pts} mode="line" height={160} onScrub={setScrub} /></div>
-      <div className="mt-1 flex gap-1">{(Object.keys(RANGES) as Range[]).map((r) => <button key={r} aria-pressed={range === r} onClick={() => { haptic(4); setRange(r); }} className={clsx("min-h-[40px] flex-1 rounded-lg text-[14px] font-semibold", range === r ? "bg-surface-3 text-[var(--header)]" : "text-muted")}>{r}</button>)}</div>
+      <div className="mt-1 flex gap-1">{(Object.keys(RANGES) as Range[]).map((r) => <button key={r} aria-pressed={range === r} onClick={() => { haptic(4); setRange(r); }} className={clsx("min-h-[44px] flex-1 rounded-lg text-[14px] font-semibold", range === r ? "bg-surface-3 text-[var(--header)]" : "text-muted")}>{r}</button>)}</div>
 
       <div className="mt-5 grid grid-cols-4 gap-2">
         {([["Send", ArrowUpRight, () => setSheet("send")], ["Receive", ArrowDownLeft, () => setSheet("receive")], ["Swap", ArrowLeftRight, () => go("/trade/portfolio")], ["Buy", Plus, () => go("/trade/search")]] as const).map(([label, I, fn]) => (
@@ -100,7 +100,7 @@ function WalletHome({ s, now }: { s: WorldState; now: number }) {
           <span className="text-right"><span className="num block text-[15px] font-semibold text-[var(--header)]">{fmtUsd(value)}</span>{price !== undefined ? <TokenChange chain={p.chain} address={p.address} /> : <span className="text-[12px] text-warn">price unavailable</span>}</span>
         </button>
       ))}
-      {!v.items.length && <p className="px-1 py-3 text-[15px] text-muted">Your tokens show up here after you buy something in <button className="font-semibold text-accent" onClick={() => go("/trade")}>Kiteline</button>.</p>}
+      {!v.items.length && <p className="px-1 py-3 text-[15px] text-muted">Your tokens show up here after you buy something in <button className="hit-lg font-semibold text-accent" onClick={() => go("/trade")}>Kiteline</button>.</p>}
       {multi && <p className="mt-4 px-1 text-[13px] text-muted">Showing the {acct.name} account. Total across accounts: <span className="num font-semibold text-fg">{fmtUsd(walletValue(s, now).total)}</span></p>}
 
       {sheet === "send" && <SendSheet s={s} onClose={() => setSheet(undefined)} />}

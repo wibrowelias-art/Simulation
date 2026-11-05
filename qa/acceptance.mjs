@@ -38,9 +38,16 @@ const snap = () => page.evaluate(() => {
     godRx: rx, more: badge("more"), lounge: badge("lounge"), hasText: sec.includes("sup guys"),
   };
 });
+// the Lounge tab bar (and its unread badges) shows on the server list, not inside a chat on phones
+const badges = async () => {
+  await page.evaluate(() => { location.hash = "#/lounge/godhq"; }); await wait(900);
+  const n = await page.evaluate(() => [...document.querySelectorAll('[data-badge^="lounge-"]')].reduce((a, el) => a + (parseInt(el.textContent ?? "0") || 0), 0));
+  await page.evaluate(() => { location.hash = "#/lounge/godhq/godhq-general"; }); await wait(900);
+  return n;
+};
+const badgeBefore = await badges();
 const before = await snap();
 const seen = new Set(before.mids);
-const badgeBefore = before.more + before.lounge;
 
 await box.fill("sup guys");
 await box.press("Enter");
@@ -56,7 +63,6 @@ while (Date.now() - t0 < 15000) {
   if (fresh.some(([a, ra]) => a?.startsWith("c") && ra === "god")) mark("replyToGod");
   if (fresh.some(([a, ra]) => a?.startsWith("c") && ra.startsWith("c"))) mark("characterToCharacter");
   if (last.godRx > 0) mark("reactionsOnGod");
-  if (last.more + last.lounge > badgeBefore) mark("notificationBadge");
   const el = Date.now() - t0;
   if (shots === 0 && (last.typing || el > 2200)) { await page.screenshot({ path: `${OUT}${PREFIX}-godspeaks-1.png` }); shots = 1; }
   if (shots === 1 && el > 3200) { await page.screenshot({ path: `${OUT}${PREFIX}-godspeaks-2.png` }); shots = 2; }
@@ -64,6 +70,8 @@ while (Date.now() - t0 < 15000) {
 }
 await page.screenshot({ path: `${OUT}${PREFIX}-godspeaks-3.png` });
 const freshCount = last.mids.filter((id) => !seen.has(id)).length;
+const badgeAfter = await badges();
+if (badgeAfter > badgeBefore) first.notificationBadge = Date.now() - t0;
 
 // other servers echo it later (shared event bus) — find their messages through global search
 let echoes = [], tEcho = null;
@@ -71,7 +79,7 @@ while (Date.now() - t0 < 300000) {
   await wait(10000);
   await page.evaluate(() => { location.hash = "#/search?q=sup%20guys"; });
   await wait(1200);
-  echoes = await page.$$eval("[data-testid=search-msg]", (b) => b.map((x) => x.innerText.replace(/\s+/g, " ")).filter((t) => !t.includes("GOD HQ #")));
+  echoes = await page.$$eval("[data-testid=search-msg]", (b) => b.map((x) => x.innerText.replace(/\s+/g, " ")).filter((t) => !t.includes("Trenches #general")));
   if (echoes.length) { tEcho = Date.now() - t0; break; }
 }
 await page.screenshot({ path: `${OUT}${PREFIX}-godspeaks-4.png` });
@@ -83,7 +91,7 @@ if (video) {
 }
 await browser.close();
 
-const report = { base: BASE, firstSeenMs: first, newMessagesIn15s: freshCount, godReactionsAt15s: last.godRx, badge: { before: badgeBefore, after: last.more + last.lounge }, echoAfterMs: tEcho, echoes: echoes.slice(0, 5), errors };
+const report = { base: BASE, firstSeenMs: first, newMessagesIn15s: freshCount, godReactionsAt15s: last.godRx, badge: { before: badgeBefore, after: badgeAfter }, echoAfterMs: tEcho, echoes: echoes.slice(0, 5), errors };
 console.log(JSON.stringify(report, null, 2));
 const ok = first.typing <= 3000 && first.replyToGod <= 4000 && first.characterToCharacter != null && first.reactionsOnGod != null && first.notificationBadge != null && echoes.length > 0 && !errors.length;
 console.log(ok ? "ACCEPTANCE PASS" : "ACCEPTANCE FAIL");

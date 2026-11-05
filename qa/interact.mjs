@@ -1,5 +1,5 @@
 // Phone acceptance for the interactivity pass + gh0st storyline: typing presence, reaction cascade,
-// voice lounge, @mention + soft command, and a leak that spreads across Lounge, Chirp, news and events.
+// voice lounge, @mention + soft command, and a leak that spreads across Lounge, Murmur, news (HACKER=1 only; the storyline is paused).
 import { chromium } from "playwright-core";
 import { executablePath } from "./_browser.mjs";
 import fs from "node:fs";
@@ -110,7 +110,8 @@ for (const [i, text] of [`@${ch.username} tell a joke`, `@${ch.username} drop a 
   await shot(`command-${i + 1}`);
 }
 
-// 5. hacker storyline: dare gh0st in DMs, then watch the leak spread
+// 5. hacker storyline (paused since the Lanternfish rebuild; HACKER=1 runs it): dare gh0st in DMs, then watch the leak spread
+if (process.env.HACKER) {
 const g = w.characters.find((c) => c.username === "gh0st_");
 const dm = `dm:${["god", g.id].sort().join(":")}`;
 await hash(`#/lounge/dm/${dm}`);
@@ -141,7 +142,7 @@ if (leak) {
   const doc = (await rows()).reverse().find((r) => r.meme);
   if (doc) await page.evaluate((id) => document.querySelector(`[data-mid="${id}"]`)?.scrollIntoView({ block: "center" }), doc.id); await wait(600);
   await shot("hacker-undernet");
-  await hash("#/chirp"); await wait(800);
+  await hash("#/feed"); await wait(800);
   const post = page.getByText(`#${leak.tag}`).first();
   R.hacker.chirp = await post.count() > 0;
   if (R.hacker.chirp) await post.evaluate((e) => e.scrollIntoView({ block: "center" })); await wait(600);
@@ -157,6 +158,7 @@ if (leak) {
   const wl = await worldJson();
   R.hacker.loungeReactions = wl.messages.filter((m) => m.topicId === leak.id && m.serverId !== "undernet" && m.serverId !== "dm").slice(0, 4).map((m) => m.text);
   await shot("hacker-lounge");
+}
 }
 R.errors = errors;
 fs.writeFileSync(`${OUT}${P}-interact-report.json`, JSON.stringify(R, null, 2));

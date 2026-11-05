@@ -36,7 +36,7 @@ function PostCardImpl({ s, p, now, compact, onOpen }: CardProps & { sig: string 
     <article onClick={onOpen} className={clsx("cursor-pointer border-b border-[var(--border)] px-4 py-3 transition-colors active:bg-surface md:hover:bg-surface/60", fresh && "msg-in")}>
       {parent && <div className="mb-1 ml-[52px] text-[13px] text-muted">Replying to <span className="text-accent">@{who(s, parent.authorId).handle}</span></div>}
       <div className="flex gap-3">
-        <button aria-label={`${a.name}'s profile`} className="shrink-0 self-start" onClick={(e) => { e.stopPropagation(); if (a.kind === "char") go(`/u/${a.id}`); else if (a.kind === "god") go("/feed/you"); }}><Avatar src={a.avatar} size={40} /></button>
+        <button aria-label={`${a.name}'s profile`} className="hit shrink-0 self-start" onClick={(e) => { e.stopPropagation(); if (a.kind === "char") go(`/u/${a.id}`); else if (a.kind === "god") go("/feed/you"); }}><Avatar src={a.avatar} size={40} /></button>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1 text-[15px]">
             <NameLine w={a} className="text-[var(--header)]" />
@@ -45,7 +45,7 @@ function PostCardImpl({ s, p, now, compact, onOpen }: CardProps & { sig: string 
           </div>
           {p.breaking && <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-down/15 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-down">Breaking</div>}
           {p.title && !article && <div className="mt-0.5 text-[15px] font-semibold text-[var(--header)]">{p.title}</div>}
-          <div className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-[1.4] text-fg"><RichText text={p.text} onTag={(t) => go(`/feed/tag/${t}`)} onUser={openUser} /></div>
+          <div className="rich-inline mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-[1.4] text-fg"><RichText text={p.text} onTag={(t) => go(`/feed/tag/${t}`)} onUser={openUser} /></div>
           {article && (
             <button onClick={(e) => { e.stopPropagation(); go(`/news/${article.id}`); }} className="mt-2 block w-full overflow-hidden rounded-2xl border border-[var(--border)] text-left">
               <div className="h-24 w-full" style={{ background: `linear-gradient(135deg, ${a.color ?? "#333"}, #0b0c0e)` }} />
@@ -175,7 +175,7 @@ function HomeTab({ s, now }: { s: WorldState; now: number }) {
       <header className="glass sticky top-0 z-10 border-b border-[var(--border)] pt-[env(safe-area-inset-top)]">
         <div className="flex items-center justify-between px-4 pb-1 pt-2">
           <h1 className="text-[22px] font-extrabold text-[var(--header)]">{APP.feed.name}</h1>
-          <button aria-label="Your profile" onClick={() => go("/feed/you")} className="hit"><Avatar src={who(s, "god").avatar} size={32} /></button>
+          <button aria-label="Your profile" onClick={() => go("/feed/you")} className="hit-lg"><Avatar src={who(s, "god").avatar} size={32} /></button>
         </div>
         <div className="flex" role="tablist">
           {(["foryou", "following"] as const).map((t) => (
@@ -204,7 +204,7 @@ function ExploreTab({ s, now }: { s: WorldState; now: number }) {
       <div className="glass sticky top-0 z-10 px-4 py-2">
         <label className="flex min-h-[44px] items-center gap-2 rounded-full bg-surface px-4">
           <SearchIcon className="size-5 text-muted" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${APP.feed.name}`} aria-label={`Search ${APP.feed.name}`} className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${APP.feed.name}`} aria-label={`Search ${APP.feed.name}`} className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted" />
         </label>
       </div>
       {query ? (

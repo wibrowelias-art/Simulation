@@ -69,7 +69,7 @@ export function SettingsView() {
 
         <Group title="Privacy" note="Everything is stored only in this browser. A passcode keeps casual snoopers out; it isn't real security.">
           <Row><input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder={profile?.passHash ? "New passcode" : "Set a passcode"} aria-label="Passcode" className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] text-fg outline-none placeholder:text-muted" />
-            <button onClick={async () => { await changePasscode(pass || null); setPass(""); toast(pass ? "Passcode set" : "Passcode removed"); }} className="min-h-[44px] px-1 text-[16px] font-semibold text-accent">{pass ? "Save" : profile?.passHash ? "Remove" : ""}</button></Row>
+            {(pass || profile?.passHash) && <button onClick={async () => { await changePasscode(pass || null); setPass(""); toast(pass ? "Passcode set" : "Passcode removed"); }} className="min-h-[44px] px-2 text-[16px] font-semibold text-accent">{pass ? "Save" : "Remove"}</button>}</Row>
           <Row><button onClick={lock} className="min-h-[44px] w-full text-left text-[16px] text-fg">Lock and switch profile</button></Row>
         </Group>
 

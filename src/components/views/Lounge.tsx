@@ -889,7 +889,7 @@ const Row = memo(function Row({ s, srv, m, text, edited, rx, parent, parentText,
   const nick = a.char?.nicknames[srv.id];
   const mine = m.authorId === "god";
   const pinged = !mine && srv.id !== "dm" && (m.mentionsGod || /@god\b/i.test(text)); // a 1:1 DM isn't a "mention"
-  const press = useLongPress(onLong);
+  const { consumed, ...press } = useLongPress(onLong);
   const open = (e: React.MouseEvent) => { e.stopPropagation(); if (a.kind === "char") go(`/u/${a.id}`); };
   const pa = parent ? who(s, parent.authorId) : undefined;
   if (m.deleted) return null;
@@ -911,7 +911,7 @@ const Row = memo(function Row({ s, srv, m, text, edited, rx, parent, parentText,
       {showNew && <div className="relative mx-4 my-2 h-px bg-down"><span className="absolute -top-[8px] right-0 rounded-[4px] bg-down px-1 text-[10px] font-bold leading-4 text-white">NEW</span></div>}
       <div data-mid={m.id} data-author={m.authorId} data-reply-author={parent?.authorId}
         {...press}
-        onClick={(e) => { e.stopPropagation(); if (press.consumed()) return; if (!isPhone()) onSelect(); }}
+        onClick={(e) => { e.stopPropagation(); if (consumed()) return; if (!isPhone()) onSelect(); }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (isPhone()) onLong(); else if (!selected) onSelect(); }}
         className={clsx("msg-row press row-cv group relative cursor-default select-none px-4 md:select-text", grouped ? "py-[2px]" : "mt-[14px] pb-[2px] pt-[2px]", fresh && "msg-in", flash && "flash-gold",
           pinged && "mention-row", selected && "!bg-[var(--chat-hover)]")}>

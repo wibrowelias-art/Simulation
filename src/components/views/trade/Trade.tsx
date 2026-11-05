@@ -156,7 +156,7 @@ function Portfolio({ s, now }: { s: WorldState; now: number }) {
         </div>
       </div>
       <h2 className="mb-1 mt-5 text-[13px] font-bold uppercase text-muted">Positions</h2>
-      {!v.items.length && <p className="rounded-2xl bg-surface p-4 text-[15px] text-muted">No open positions. Find something in <button className="font-semibold text-accent" onClick={() => go("/trade")}>Discover</button>.</p>}
+      {!v.items.length && <p className="rounded-2xl bg-surface p-4 text-[15px] text-muted">No open positions. Find something in <button className="hit-lg font-semibold text-accent" onClick={() => go("/trade")}>Discover</button>.</p>}
       {v.items.map(({ p, value, pnl, pnlPct, price }) => (
         <button key={tokenKey(p)} onClick={() => open(p)} className="flex min-h-[64px] w-full items-center gap-3 rounded-xl px-1 text-left active:bg-surface md:hover:bg-surface">
           <TokenIcon symbol={p.symbol} address={p.address} chain={p.chain} />

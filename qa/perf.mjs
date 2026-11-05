@@ -27,7 +27,7 @@ for (const away of ["", "10m", "6h", "3d"]) {
     const { p, cdp } = r;
     const close = p.getByRole("button", { name: "Catch up" }); if (await close.count()) await close.click();
     await cdp.send("Performance.enable");
-    for (const route of ["#/lounge", "#/chirp", "#/news", "#/dashboard", "#/platforms/snapgram"]) {
+    for (const route of ["#/", "#/lounge", "#/feed", "#/trade", "#/wallet"]) {
       await p.evaluate((h) => { location.hash = h; }, route); await p.waitForTimeout(1500);
       await p.evaluate(() => { window.__lt = []; });
       const m0 = Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));

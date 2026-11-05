@@ -54,13 +54,21 @@ R.members = await audit();
 await page.getByRole("button", { name: "Close members" }).first().click(); await wait(400);
 await page.getByRole("button", { name: "Open channels" }).first().click(); await wait(500);
 R.servers = await audit();
-await page.getByRole("button", { name: "GOD apps" }).click(); await wait(400);
+await page.getByRole("button", { name: "Apps", exact: true }).click(); await wait(400);
 R.apps = await audit();
 await page.keyboard.press("Escape"); await wait(300);
 for (const [k, tab] of [["messages", /^Messages/], ["notifications", /^Notifications/], ["you", /^You/]]) {
   await page.getByRole("navigation", { name: "Lounge tabs" }).getByRole("button", { name: tab }).click(); await wait(500);
   R[k] = await audit();
 }
+// the other apps
+for (const [k, h] of [["home", "#/"], ["feed", "#/feed"], ["feedExplore", "#/feed/explore"], ["feedYou", "#/feed/you"], ["trade", "#/trade"], ["portfolio", "#/trade/portfolio"], ["wallet", "#/wallet"], ["activity", "#/wallet/activity"], ["settings", "#/settings"]]) {
+  await page.evaluate((x) => { location.hash = x; }, h); await wait(1200);
+  R[k] = await audit();
+}
+await page.evaluate(() => { location.hash = "#/feed"; }); await wait(800);
+await page.getByRole("button", { name: "New post" }).click(); await wait(600);
+R.compose = await audit();
 await b.close();
 
 const total = Object.values(R).reduce((a, x) => a + x.length, 0);

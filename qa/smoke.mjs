@@ -26,7 +26,7 @@ for (const [label, vp] of [["mobile", { width: 390, height: 844 }], ["desktop", 
   await go("#/lounge/godhq/godhq-general");
   await step("search", async () => {
     await page.getByRole("button", { name: "Search messages" }).click(); await wait(400);
-    await page.getByPlaceholder(/Search/).first().fill("god"); await wait(600);
+    await page.getByPlaceholder(/Search/).first().fill("the"); await wait(600);
     const hits = await page.locator("mark").count(); if (!hits) throw new Error("no highlighted search hits");
   });
   await page.keyboard.press("Escape"); await wait(300);
@@ -69,25 +69,39 @@ for (const [label, vp] of [["mobile", { width: 390, height: 844 }], ["desktop", 
     const box = page.getByPlaceholder(/Message @/); await box.fill("hey it's me"); await box.press("Enter"); await wait(4500);
   });
   await step("dm-list", async () => { await go("#/lounge/dm"); });
-  await step("chirp-like", async () => {
-    await go("#/chirp");
+  await step("home", async () => {
+    await go("#/");
+    for (const n of ["Lanternfish", "Kiteline", "Murmur"]) if (!(await page.getByRole("button", { name: n }).count())) throw new Error(`home has no ${n} button`);
+  });
+  await step("feed-like", async () => {
+    await go("#/feed");
     const like = page.getByRole("button", { name: "Like" }).first(); await like.click(); await wait(400);
     if (!(await page.getByRole("button", { name: "Unlike" }).count())) throw new Error("like didn't toggle");
     await page.getByRole("button", { name: /^Reply,/ }).first().click(); await wait(700);
     const h = await page.evaluate(() => location.hash); if (!h.includes("compose=reply")) throw new Error(`reply went to ${h}`);
   });
-  await step("platform-sheet", async () => {
-    await go("#/platforms/snapgram");
-    await page.locator("[role=button]").first().click(); await wait(700);
-    if (!(await page.evaluate(() => location.hash)).includes("?p=")) throw new Error("card didn't open");
+  await step("feed-compose", async () => {
+    await go("#/feed");
+    await page.getByRole("button", { name: "New post" }).click(); await wait(500);
+    await page.getByRole("dialog", { name: "New post" }).getByLabel("Write a post").fill("smoke test post"); await wait(200);
+    await page.getByRole("dialog", { name: "New post" }).getByRole("button", { name: "Post", exact: true }).click(); await wait(800);
+    if (!(await page.getByText("smoke test post").count())) throw new Error("post didn't appear");
   });
-  await step("global-search", async () => { await go("#/search?q=god"); });
-  await step("alerts", async () => { await go("#/alerts"); });
+  await step("feed-explore", async () => { await go("#/feed/explore"); await page.getByRole("region", { name: "Trends" }).first().waitFor(); });
+  await step("feed-you", async () => { await go("#/feed/you"); });
+  await step("trade-discover", async () => { await go("#/trade"); await page.getByRole("heading", { name: "Discover" }).waitFor(); });
+  await step("trade-portfolio", async () => { await go("#/trade/portfolio"); });
+  await step("wallet", async () => {
+    await go("#/wallet");
+    await page.getByRole("button", { name: /^Receive/ }).first().click(); await wait(500);
+    await page.keyboard.press("Escape"); await wait(300);
+  });
+  await step("wallet-activity", async () => { await go("#/wallet/activity"); });
+  await step("global-search", async () => { await go("#/search?q=trade"); });
   await step("profile", async () => { await go("#/u/c1"); });
   await step("settings", async () => { await go("#/settings"); });
-  await step("events", async () => { await go("#/events"); });
   if (label === "mobile") {
-    // phone Lounge: its own tabs, and the crown on the server rail leads to the rest of GOD
+    // phone Lounge: its own tabs, and the Apps button on the server rail leads to the other apps
     await step("lounge-tabs", async () => {
       await go("#/lounge/godhq");
       const tabs = page.getByRole("navigation", { name: "Lounge tabs" });
@@ -97,9 +111,9 @@ for (const [label, vp] of [["mobile", { width: 390, height: 844 }], ["desktop", 
       await page.getByRole("button", { name: "Open channels" }).click(); await wait(500);
     });
     await step("apps-sheet", async () => {
-      await page.getByRole("button", { name: "GOD apps" }).click(); await wait(400);
-      await page.getByRole("dialog", { name: "GOD apps" }).getByRole("button", { name: "Chirp" }).click(); await wait(800);
-      if (!(await page.evaluate(() => location.hash)).includes("chirp")) throw new Error("apps sheet didn't open Chirp");
+      await page.getByRole("button", { name: "Apps", exact: true }).click(); await wait(400);
+      await page.getByRole("dialog", { name: "Apps" }).getByRole("button", { name: "Murmur" }).click(); await wait(800);
+      if (!(await page.evaluate(() => location.hash)).includes("feed")) throw new Error("apps sheet didn't open Murmur");
     });
   }
   const txt = await page.evaluate(() => document.body.innerText); if (/SIMULATION/.test(txt)) problems.push(`${label}: SIMULATION marker`);
