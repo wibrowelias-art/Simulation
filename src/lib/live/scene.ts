@@ -167,9 +167,14 @@ export function ambientTick(s: WorldState, h: SceneHooks): Promise<"live" | "fal
   const g = pick[1];
   if (g.some((m) => crewRole(s, m.authorId) && m.serverId === "undernet")) return;
   const topic = g[0].topicId ? s.topics.find((t) => t.id === g[0].topicId) : undefined;
-  const about = topic ? `${topic.label}${topic.about === "world" ? "" : " (something god did)"}` : "their own lives, plans and whatever is going on in the server";
+  // a wave about something the player said here: the scene knows exactly what, and that the room is still on it
+  const said = topic?.category === "chat" ? [...s.messages, ...s.pending].reverse().find((m) => m.authorId === "god" && m.topicId === topic.id && !m.deleted) : undefined;
+  const P = s.player.handle ?? "god";
+  const q = said && (said.text.length > 60 ? said.text.slice(0, 57) + "…" : said.text);
+  const about = said ? `@${P} saying "${q}" here minutes ago; chat can't let it go: quoting it, arguing, begging @${P} for more`
+    : topic ? `${topic.label}${topic.about === "world" ? "" : " (something god did)"}` : "their own lives, plans and whatever is going on in the server";
   inflight = true;
-  return liveScene(s, g, { mode: "ambient", lane: "ambient", hold: true, about }, h).finally(() => { inflight = false; });
+  return liveScene(s, g, { mode: "ambient", lane: "ambient", hold: true, about, god: said }, h).finally(() => { inflight = false; });
 }
 
 /* ------------------------------------------------------------------ presence moments */

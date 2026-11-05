@@ -9,7 +9,7 @@ import { EVENT_DEFS } from "./events";
 import { charById, netWorth } from "./world";
 import { fmtMoney } from "./format";
 import { STRICT_BEATS } from "./servers";
-import { ambientDm, godSpeak, handleBus } from "./godspeak";
+import { ambientDm, buzzChannels, godBuzz, godSpeak, handleBus } from "./godspeak";
 import { undernetBus, undernetOnAction, undernetTick, type EngineHooks } from "./undernet";
 import { editReact, pinReact, reactCascade, voiceTick } from "./presence";
 import { makeMeme, MEME_LINES, type MemeSpec } from "./memes";
@@ -543,7 +543,7 @@ export function processBucket(s: WorldState, b: number) {
   }
   // the channel the player is looking at never goes dead while it's "active"
   const f = s.focus;
-  if (f && t0 - f.t < 90_000 && f.serverId !== "dm") {
+  if (f && t0 - f.t < 90_000 && f.serverId !== "dm" && !(s.godLog.length && buzzChannels(s, t1).some((z) => z.channelId === f.channelId))) {
     const srv = s.servers.find((x) => x.id === f.serverId);
     const ch = srv?.channels.find((c) => c.id === f.channelId);
     if (srv && ch && !ch.announce) {
@@ -557,6 +557,9 @@ export function processBucket(s: WorldState, b: number) {
       if (!upcoming && quietFor > 12_000 / busy && rng.chance(clamp(0.35 * busy, 0.08, 0.8))) runEpisode(s, rng, srv, ch, Math.max(t0, f.t) + rng.range(1, 6) * 1000, pickTopic(s, rng, ch));
     }
   }
+  // channels you just talked in stay on you for a while: each line you send adds heat, and the room keeps
+  // coming back to it in waves (live, with typing) until it cools off
+  if (s.godLog.length) for (const z of buzzChannels(s, t1)) godBuzz(s, z, b, t1);
   // shared event bus: deliver world events whose time has come
   if (s.bus.length) {
     const due = s.bus.filter((e) => e.t < t1).sort((a, b) => a.t - b.t);

@@ -109,6 +109,26 @@ export const CHAIN = {
   still: ["is he still here?", "@god come back", "ok he left", "he's gone isn't he", "@god you still there?", "he's lurking, i can feel it"],
 };
 
+/** the minutes after @god talked: the room can't let it go ({q} latest line, {q0} an earlier one, {n} lines, {mins} since) */
+export const AFTER = {
+  fan: ["still not over \"{q}\"", "chat has not recovered from \"{q}\"", "it's been {mins} min and we're still on \"{q}\"", "someone make \"{q}\" the server description",
+    "i'm getting \"{q}\" tattooed", "rereading \"{q}\" for the 10th time", "\"{q}\" lives in my head rent free now", "every time i scroll up i see \"{q}\" and lose it again",
+    "i was HERE for \"{q}\". my grandkids will hear about this", "my notifications have not stopped since \"{q}\"", "who else is just refreshing waiting for another message",
+    "STILL SHAKING", "WE'RE STILL TALKING ABOUT IT", "the server hasn't been this active in months", "lurkers coming out of the woodwork for this 💀", "@god in the chat is a whole event",
+    "the screenshot of \"{q}\" is already everywhere", "mods please never delete \"{q}\"", "\"{q}\" is lowkey the best thing said in here all year", "@god say something else pls",
+    "@god we're still here btw 🫡", "ok but what did @god MEAN by \"{q}\"", "typed \"{q}\" and dipped. legendary", "i keep telling people about \"{q}\" and they don't get it",
+    "new people joining like what happened. \"{q}\" happened", "framing \"{q}\" honestly", "still grinning at \"{q}\" like an idiot", "best day in this server and it's not close"],
+  neg: ["y'all are acting like @god cured something. it was \"{q}\"", "can we talk about anything other than \"{q}\" 😭", "it's been {mins} min. let it go", "\"{q}\" was mid and you all know it",
+    "the glazing in here is unreal", "imagine losing your mind over \"{q}\"", "every time @god types the iq in here drops", "i'm muting this channel for an hour",
+    "you guys need a hobby that isn't \"{q}\"", "lmao still on this?", "@god said 4 words and y'all wrote a thesis"],
+  multi: ["@god is ACTUALLY chatting today", "that's {n} messages in like {mins} minutes, we're so back", "first \"{q0}\" and now \"{q}\"?? @god is cooking", "ok @god is on a roll",
+    "this is the most @god has talked in here ever", "keep going 🙏", "@god don't stop now", "SERVER IS ON FIRE", "@god keeps typing and i keep screaming",
+    "somebody start a log of everything @god says today", "{n} messages. {n}. i'm not okay", "\"{q0}\" → \"{q}\" is a whole storyline"],
+  multiNeg: ["does @god not have anything better to do", "@god posting again. can't escape it", "{n} messages and not one of them made sense", "the server is unusable when @god is on"],
+  answer: ["@{user} same", "@{user} literally", "@{user} real", "@{user} stop i'm crying", "@{user} you're not wrong", "@{user} we know you're jealous", "@{user} touch grass it's a chat",
+    "@{user} let us be happy for 5 min", "@{user} the delusion 😭", "@{user} it's a big deal and you know it", "@{user} bro you've been here the whole time too"],
+};
+
 /** when @god replies to a specific character */
 export const FREAK: Record<Obsession, string[]> = {
   obsessed: ["HE REPLIED TO ME", "GOD REPLIED TO ME I'M FRAMING THIS", "@god 😭😭😭 thank you", "i'm never deleting this account", "MOM GET THE CAMERA", "I CAN'T FEEL MY HANDS",

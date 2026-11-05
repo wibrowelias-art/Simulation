@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { memeAlt, type MemeSpec } from "@/lib/sim/memes";
 import { avatarUri, GOD_AVATAR } from "@/lib/sim/avatar";
 import type { PfpStyle } from "@/lib/sim/types";
+import { showHandle } from "./ui";
 
 /** greedy word wrap for SVG text */
 function wrap(text: string, max: number, lines = 4): string[] {
@@ -62,7 +63,9 @@ const Emoji = ({ e, x, y, size }: { e?: string; x: number; y: number; size: numb
   <text x={x} y={y} fontSize={size} textAnchor="middle" dominantBaseline="central">{e}</text>
 );
 
-function Svg({ m, id }: { m: MemeSpec; id: string }) {
+function Svg({ m: raw, id }: { m: MemeSpec; id: string }) {
+  // meme text from the engine calls the player "god": show their handle instead
+  const m = { ...raw, top: raw.top && showHandle(raw.top), bottom: raw.bottom && showHandle(raw.bottom) };
   switch (m.f) {
     case "caption":
       return (<svg viewBox="0 0 400 400"><Scene hue={m.hue} seed={m.seed} id={id} /><Emoji e={m.art} x={200} y={210} size={150} />{m.top && <Caption text={m.top} y={48} />}{m.bottom && <Caption text={m.bottom} y={378} anchor="bottom" />}</svg>);
@@ -182,7 +185,7 @@ function Svg({ m, id }: { m: MemeSpec; id: string }) {
             {body.map((l, i) => <tspan key={i} x="200" dy={i ? 38 : 0}>{l}</tspan>)}
           </text>
           <image href={GOD_AVATAR} x="128" y="318" width="36" height="36" clipPath="circle(18px at 18px 18px)" />
-          <text x="172" y="342" fontSize="17" fontWeight="700" fill="#e8b84a" fontFamily="ui-sans-serif, system-ui">— god {m.art ?? ""}</text>
+          <text x="172" y="342" fontSize="17" fontWeight="700" fill="#e8b84a" fontFamily="ui-sans-serif, system-ui">— {showHandle("god")} {m.art ?? ""}</text>
         </svg>
       );
     }

@@ -1,5 +1,5 @@
 import { rngFor, type Rng } from "./rng";
-import type { BusEvent, Channel, Character, Message, Obsession, Post, Server, Topic, WorldState } from "./types";
+import type { BusEvent, Channel, Character, GodLine, Message, Obsession, Post, Server, Topic, WorldState } from "./types";
 import { charById, netWorth } from "./world";
 import { clamp, diurnal, engagementFor, makeArticle, makePost, memeFor, nid, notify, rememberText, runEpisode, seenText } from "./engine";
 import { MEME_LINES } from "./memes";
@@ -12,7 +12,7 @@ import { crewDmReply, crewRole } from "./undernet";
 import { adjustRel, nudgeMood, relOf, rememberLong, toYou } from "./memory";
 import { COMMAND_BANK, PRESENCE_LINES, findMentioned, godStopTyping, parseCommand } from "./presence";
 import { tagify, COINS } from "./topics";
-import { AMBIENT, BY_OBSESSION, CHAIN, DM_OPEN, DM_REPLY, ECHO_OPEN, ECHO_REPLY, FREAK, FREAK_OTHERS, HYPE, LEAD, TO_GOD, type GodIntent } from "./godlines";
+import { AFTER, AMBIENT, BY_OBSESSION, CHAIN, DM_OPEN, DM_REPLY, ECHO_OPEN, ECHO_REPLY, FREAK, FREAK_OTHERS, HYPE, LEAD, TO_GOD, type GodIntent } from "./godlines";
 
 const SEC = 1000, MIN = 60_000;
 
@@ -80,11 +80,14 @@ function slots(x: Ctx, c: Character, user?: Character, extra: Slots = {}): Slots
   const { s, rng, p, srv, ch } = x;
   const past = pastGodLine(s, rng, x.god.id);
   const mem = c.memory.length ? rng.pick(c.memory).label : undefined;
-  const hold = s.player.holdings.length ? rng.pick(s.player.holdings).name : "the empire";
+  // what the player holds now: their paper bags (by ticker), else the portfolio as a whole
+  const bags = (s.wallet?.positions ?? []).map((x) => `$${x.symbol}`);
+  const hold = bags.length ? `the ${rng.pick(bags)} bag` : rng.pick(["the portfolio", "the bags", "the portfolio", "your picks"]);
+  const cash = s.wallet ? Object.values(s.wallet.cash).reduce((a, v) => a + Number(v), 0) : netWorth(s);
   return slotsFor(rng, s, c, undefined, {
     q: p.quote, Q: p.quote.toUpperCase(), kw: p.keywords.length ? rng.pick(p.keywords) : p.quote.split(" ")[0] || "that",
     coin: p.coin ?? (s.player.holdings.find((h) => h.kind === "coin")?.name.replace(/^\$/, "") ?? rng.pick(COINS)), ch: ch.name, server: srv.name, user: user?.username ?? "someone",
-    past: past.text, pastwhere: past.where, mem: mem ?? `the ${hold} thing`, holding: hold, nw: fmtMoney(netWorth(s)), here: srv.name, ...extra,
+    past: past.text, pastwhere: past.where, mem: mem ?? hold, holding: hold, nw: fmtMoney(Math.round(cash)), here: srv.name, ...extra,
   });
 }
 
@@ -400,6 +403,117 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
   const dmFrom = [...spoke.keys()].map((id) => charById(s, id)).filter((c) => c.core || fanish(obsessionOf(c)) || obsessionOf(c) === "business");
   if (dmFrom.length && rng.chance(0.6)) schedule(s, { kind: "godDm", t: Math.round(now + rng.range(1.5, 7) * MIN), data: { who: rng.pick(dmFrom).id, from: srv.id, ch: ch.id } });
   return { message: god, replies: b.msgs.length, reactions: god.reactionLog!.length, servers: chosen.map((o) => o.name) };
+}
+
+// ---------------------------------------------------------------- the room stays on you
+/** heat halves every BUZZ_HALF; a channel stays "about you" while it's above BUZZ_MIN (one line: ~25 min) */
+export const BUZZ_HALF = 8 * MIN, BUZZ_WINDOW = 30 * MIN, BUZZ_MIN = 0.12;
+
+/** channels you talked in lately, and how hot each still is: every line you send adds 1, fading by half every 8 min */
+export function buzzChannels(s: WorldState, t: number): { serverId: string; channelId: string; heat: number; lines: GodLine[] }[] {
+  const out = new Map<string, { serverId: string; channelId: string; heat: number; lines: GodLine[] }>();
+  for (const g of s.godLog) {
+    if (g.serverId === "dm" || g.serverId === "undernet" || g.t > t || t - g.t > BUZZ_WINDOW) continue;
+    const z = out.get(g.channelId) ?? { serverId: g.serverId, channelId: g.channelId, heat: 0, lines: [] };
+    z.heat += Math.pow(0.5, (t - g.t) / BUZZ_HALF);
+    z.lines.push(g);
+    out.set(g.channelId, z);
+  }
+  return [...out.values()].filter((z) => z.heat >= BUZZ_MIN);
+}
+
+/**
+ * Called once per 10 s bucket for each channel in buzzChannels (the bucket has already ended when it runs, so the
+ * wave starts at `t1` and plays live with typing indicators). When the channel has gone quiet, another wave of
+ * people picks it back up: what you said, arguing about it, @-ing you to come back. The hotter it is (more lines
+ * from you, more recent), the sooner and the bigger the next wave. Deterministic: own rng per bucket + channel.
+ */
+export function godBuzz(s: WorldState, z: { serverId: string; channelId: string; heat: number; lines: GodLine[] }, b: number, t1: number): Message[] {
+  const { srv, ch } = srvChan(s, z.serverId, z.channelId);
+  if (!srv || !ch || ch.announce) return [];
+  // lines about you: your own, the first reaction to each of them, and earlier waves
+  const yours = new Set(z.lines.map((g) => g.id));
+  const aboutYou = (m: Message) => m.authorId === "god" || m.intent === "buzz" || (!!m.episodeId && yours.has(m.episodeId));
+  // a wave (or the first reaction) is still playing: let it finish. Ordinary chatter doesn't hold the room back
+  // unless a lot of it is about to land; a hot room talks over it. Threads and far-off lines never block.
+  let lastT = 0, soon = 0, playing = 0;
+  for (const m of s.pending) {
+    if (m.channelId !== ch.id || m.threadOf || m.kind === "system") continue;
+    const near = m.t >= t1 - 1500 && m.t <= t1 + 20_000;
+    if (aboutYou(m)) { if (near) playing++; if (m.t < t1) lastT = Math.max(lastT, m.t); }
+    else if (near) soon++;
+  }
+  // (a lone late "is he still here?" isn't a conversation)
+  if (playing >= 2 || soon >= (z.heat >= 1.5 ? 5 : 3)) return [];
+  for (let i = s.messages.length - 1, n = 0; i >= 0 && n < 400; i--) {
+    const m = s.messages[i];
+    if (m.channelId !== ch.id) continue;
+    n++;
+    if (aboutYou(m)) { lastT = Math.max(lastT, m.t); break; }
+  }
+  const rng = rngFor(s.seed, "buzz", `${b}:${ch.id}`);
+  const heat = z.heat;
+  // a breather since the last line about you: hot rooms barely pause (heat 1: ~8 s, heat 3: ~3 s)
+  if (t1 - lastT < clamp(8000 / heat, 3000, 45_000)) return [];
+  if (!rng.chance(clamp(0.45 + heat * 0.3, 0.3, 0.97))) return [];
+
+  const latest = z.lines[z.lines.length - 1];
+  const god = s.messages.find((m) => m.id === latest.id) ?? s.pending.find((m) => m.id === latest.id);
+  const topic = god?.topicId ? s.topics.find((t) => t.id === god.topicId) : undefined;
+  if (!god || !topic || god.deleted) return [];
+  const p = parseGodText(latest.text);
+  const x: Ctx = { s, rng, srv, ch, god, p, now: t1, topic };
+  const extra = { n: String(z.lines.length), mins: String(Math.max(1, Math.round((t1 - latest.t) / MIN))), q0: parseGodText(z.lines[0].text).quote };
+  const many = z.lines.length >= 2 && heat >= 1.6;
+  const bu = new Burst(x, t1 + rng.range(1.2, 4) * SEC);
+  const epId = nid(s, "e");
+  const said: Message[] = [];
+  const say = (c: Character, txt: string, o: Parameters<Burst["push"]>[2]) => { const m = bu.push(c, txt, o); m.episodeId = epId; said.push(m); return m; };
+  const weights = { obsessed: 5, supporter: 3, business: 1.2, skeptic: 1, rival: 0.9, hater: 1, indifferent: 0.35 } as Record<Obsession, number>;
+
+  const n = Math.round(clamp(3 + heat * 3 + rng.poisson(2), 4, 18));
+  for (let i = 0; i < n; i++) {
+    const gap: [number, number] = i === 0 ? [0, 0] : heat > 2 ? [0.6 * SEC, 2.4 * SEC] : [1.2 * SEC, 4.5 * SEC];
+    const prev = said[said.length - 1];
+    const r = rng.next();
+    if (prev && r < 0.3) {
+      // someone answers the last person: agreeing, piling on, or pushing back
+      const B = charById(s, prev.authorId), obB = obsessionOf(B);
+      const A = audience(x, (o) => (fanish(obB) ? (negish(o) || o === "skeptic" ? 2.5 : fanish(o) ? 2 : 0.4) : fanish(o) ? 4 : 0.6), new Set([B.id]), bu.cur);
+      if (!A) continue;
+      const oa = obsessionOf(A);
+      const bank = fanish(oa) && negish(obB) ? CHAIN.fanToHater : negish(oa) && fanish(obB) ? CHAIN.haterToFan : oa === "skeptic" && fanish(obB) ? CHAIN.skepticToFan : AFTER.answer;
+      say(A, line(s, rng, A, bank, slots(x, A, B, extra)), { replyTo: prev.id, intent: bank === AFTER.answer ? "chain" : "disagree", gap });
+      continue;
+    }
+    const c = audience(x, (o) => weights[o], new Set(), bu.cur);
+    if (!c) break;
+    const ob = obsessionOf(c);
+    let bank: string[];
+    let replyTo: string | undefined;
+    if (many && r < 0.55) bank = negish(ob) ? AFTER.multiNeg : AFTER.multi;
+    else if (r < 0.75) bank = negish(ob) || (ob === "indifferent" && rng.chance(0.5)) ? AFTER.neg : AFTER.fan;
+    else if (r < 0.84) { bank = TO_GOD[p.intent]; replyTo = rng.chance(0.5) ? god.id : undefined; }
+    else if (r < 0.9) bank = fanish(ob) ? HYPE : BY_OBSESSION[ob];
+    else if (r < 0.95 && s.godLog.some((g) => g.serverId !== "dm" && g.id !== latest.id)) bank = CHAIN.memory; // only with something older to bring up
+    else bank = CHAIN.still;
+    say(c, line(s, rng, c, bank, slots(x, c, undefined, extra), { lead: fanish(ob) && rng.chance(0.3) ? LEAD[ob] : undefined }), { replyTo, intent: "buzz", gap });
+  }
+  // the original message keeps collecting reactions while people talk about it
+  for (let i = 0, k = rng.int(1, Math.max(1, Math.round(heat * 3))); i < k; i++) {
+    const id = rng.pick(srv.members), c = charById(s, id);
+    (god.reactionLog ??= []).push([rng.pick(REACT_EMOJI[obsessionOf(c)]), Math.round(t1 + rng.range(1, 30) * SEC), id]);
+  }
+  // now and then someone memes it
+  if (heat >= 1 && rng.chance(0.12)) {
+    const mc = audience(x, (o) => (fanish(o) ? 2 : 1), new Set(), bu.cur);
+    if (mc) { const m = say(mc, rng.pick(MEME_LINES), { intent: "meme", gap: [2 * SEC, 6 * SEC] }); m.meme = memeFor(s, rng, mc, topic, latest.text); }
+  }
+  topic.heat = Math.max(topic.heat, 2 + heat * 2); // still trending while the room is on it
+  s.pending.push(...said);
+  const pinged = said.find((m) => m.mentionsGod);
+  if (pinged && rng.chance(0.35)) notify(s, pinged.t, "mention", `@${charById(s, pinged.authorId).username} mentioned you in ${srv.name} #${ch.name}: "${pinged.text.slice(0, 70)}"`, `lounge:${srv.id}:${ch.id}`);
+  return said;
 }
 
 function schedule(s: WorldState, ev: Omit<BusEvent, "id">) {
