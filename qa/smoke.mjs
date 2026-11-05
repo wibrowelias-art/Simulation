@@ -86,7 +86,22 @@ for (const [label, vp] of [["mobile", { width: 390, height: 844 }], ["desktop", 
   await step("profile", async () => { await go("#/u/c1"); });
   await step("settings", async () => { await go("#/settings"); });
   await step("events", async () => { await go("#/events"); });
-  if (label === "mobile") await step("more-sheet", async () => { await go("#/lounge"); await page.getByRole("button", { name: "More" }).click(); await wait(500); });
+  if (label === "mobile") {
+    // phone Lounge: its own tabs, and the crown on the server rail leads to the rest of GOD
+    await step("lounge-tabs", async () => {
+      await go("#/lounge/godhq");
+      const tabs = page.getByRole("navigation", { name: "Lounge tabs" });
+      for (const t of [/^Messages/, /^Notifications/, /^You/, /^Servers/]) { await tabs.getByRole("button", { name: t }).click(); await wait(400); }
+      await page.getByRole("button", { name: /^general(,|$)/ }).click(); await wait(600);
+      if (!(await page.getByPlaceholder("Message #general").isVisible())) throw new Error("tapping a channel didn't open the chat");
+      await page.getByRole("button", { name: "Open channels" }).click(); await wait(500);
+    });
+    await step("apps-sheet", async () => {
+      await page.getByRole("button", { name: "GOD apps" }).click(); await wait(400);
+      await page.getByRole("dialog", { name: "GOD apps" }).getByRole("button", { name: "Chirp" }).click(); await wait(800);
+      if (!(await page.evaluate(() => location.hash)).includes("chirp")) throw new Error("apps sheet didn't open Chirp");
+    });
+  }
   const txt = await page.evaluate(() => document.body.innerText); if (/SIMULATION/.test(txt)) problems.push(`${label}: SIMULATION marker`);
   await ctx.close();
 }

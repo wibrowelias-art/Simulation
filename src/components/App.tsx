@@ -130,7 +130,8 @@ export function App() {
         </nav>
         <main className="min-w-0 flex-1 overflow-hidden">{body}</main>
       </div>
-      <nav aria-label="Sections" className={clsx("flex shrink-0 border-t pb-[env(safe-area-inset-bottom)] md:hidden", inLounge ? "lounge border-black/30 bg-bg" : "border-line bg-surface")}>
+      {/* in the Lounge the phone gets the Lounge's own tabs (Servers, Messages, Notifications, You); the crown there leads back here */}
+      <nav aria-label="Sections" className={clsx("flex shrink-0 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden", inLounge && "hidden")}>
         {NAV.filter((n) => MOBILE.includes(n.id)).map((n) => (
           <button key={n.id} onClick={() => { haptic(); go(`/${n.id}`); }} aria-current={route.view === n.id ? "page" : undefined} className={clsx("relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 text-[10px] transition-colors active:scale-95", route.view === n.id ? "text-fg" : "text-muted", n.id === "god" && "text-gold")}>
             <n.icon className="size-5" />

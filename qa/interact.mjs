@@ -78,7 +78,7 @@ await page.getByTestId("voice-list").scrollIntoViewIfNeeded();
 await shot("voice-1");
 await page.getByRole("button", { name: "Join voice" }).first().click(); await wait(1200);
 await shot("voice-2");
-const closeBtn = page.getByRole("button", { name: "Close" }).first();
+const closeBtn = page.getByRole("button", { name: "Close", exact: true }).first(); // older drawer layout only
 if (await closeBtn.isVisible().catch(() => false)) await closeBtn.click();
 await hash("#/lounge/godhq/godhq-general");
 await wait(4500);

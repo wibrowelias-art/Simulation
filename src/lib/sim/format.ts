@@ -27,7 +27,7 @@ export function relAgo(t: number, now: number): string {
   return r === "now" ? "just now" : `${r} ago`;
 }
 export function clockTime(t: number): string {
-  return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 export function dayLabel(t: number, now: number): string {
   const a = new Date(t), b = new Date(now);
@@ -41,4 +41,8 @@ export function dayOnly(t: number, now: number): string {
   if (a.toDateString() === b.toDateString()) return "Today";
   if (a.toDateString() === new Date(now - 86400000).toDateString()) return "Yesterday";
   return a.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+}
+/** a full date for chat day dividers: "November 4, 2026" */
+export function fullDate(t: number): string {
+  return new Date(t).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
 }

@@ -2,78 +2,201 @@
 import clsx from "clsx";
 import { MemeImage } from "../MemeImage";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, AtSign, ChevronDown, Copy, Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Volume2, Eye, Hash, Megaphone, Menu, MessageCircle, MessagesSquare, Pencil, Pin, Reply, Search, Send, SmilePlus, Trash2, Users, X } from "lucide-react";
+import { ArrowDown, AtSign, Bell, ChevronDown, ChevronLeft, ChevronRight, Copy, Crown, Feather, Globe2, Headphones, HeadphoneOff, LayoutDashboard, Lock, Mic, MicOff, Newspaper, PhoneOff, Plus, Settings as Cog, Smile, Volume2, Eye, Hash, Megaphone, MessageCircle, MessagesSquare, Pencil, Pin, Reply, Search, Send, SmilePlus, Trash2, Users, X, Zap } from "lucide-react";
 import type { Route } from "../App";
 import { haptic } from "../App";
-import { doDelete, doEdit, doJoinVoice, doLeaveVoice, doPin, doReact, doSay, doStopTyping, doTyping, markRead, setFocus, toast, useApp } from "../store";
+import { doDelete, doEdit, doJoinVoice, doLeaveVoice, doPin, doReact, doSay, doStopTyping, doTyping, editWorld, lock, markRead, setFocus, toast, useApp } from "../store";
+import { linkTo } from "./Alerts";
 import { overheardAt, speaking, voiceChannels, voiceRoster } from "@/lib/sim/presence";
 import { Avatar, NameLine, RichText, go, who } from "../ui";
 import { channelMessages, dmThreads, isEdited, localHour, pinnedIn, reactionsAt, textAt, threadMessages, typingIn, unreadIndex, type UnreadInfo } from "@/lib/sim/engine";
 import { dmChannel, dmPeer } from "@/lib/sim/godspeak";
 import { badgesFor, lastSeenMap, obsessionOf, OBSESSION_INFO, presenceOf, type Presence } from "@/lib/sim/social";
-import { clockTime, dayOnly, fmtCount, relTime } from "@/lib/sim/format";
+import { clockTime, dayLabel, dayOnly, fmtCount, fullDate, relTime } from "@/lib/sim/format";
 import type { Channel, Message, Reaction, Server, WorldState } from "@/lib/sim/types";
 
 const MOD = "#5eead4";
 const QUICK = ["👑", "🔥", "😭", "💀", "👀", "🫡"];
+const STICKERS = ["👑👑👑", "😭😭😭", "💀💀", "🔥🔥🔥", "🫡"];
 const PICKER = ["👑", "🔥", "😭", "💀", "👀", "🫡", "😂", "🤣", "❤️", "💯", "🙏", "👏", "🤡", "🧢", "🥶", "🐐", "📈", "📉", "💸", "🚀", "🤝", "😤", "🥹", "👋", "✅", "❌", "🍿", "🧠", "😐", "🙄"];
 const DM_SERVER: Server = { id: "dm", name: "Direct Messages", icon: "💬", color: "#8a6416", description: "", bias: 0, vibe: "culture", tags: [], channels: [], members: [], moderators: [], memberCount: 0, insideJokes: [] };
 const nickOf = (s: WorldState, id: string, srv: Server) => { const x = who(s, id); return x.char?.nicknames[srv.id] ?? x.name; };
 
 /* ======================================================================= */
 
+type Tab = "servers" | "messages" | "inbox" | "you";
+const lastChannel = new Map<string, string>(); // server -> the channel you last opened there
+let lastServer = "";
+let lastDm = "";
+
+/** phones (<768 px) get the chat-app layout: tabs at the bottom, the chat as a full-screen layer that slides over */
+function usePhone() {
+  const [phone, setPhone] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const f = () => setPhone(mq.matches);
+    f();
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
+  return phone;
+}
+
 export function Lounge({ route }: { route: Route }) {
   const { world: w, now, lastRead } = useApp();
   const s = w!;
-  const isDm = route.parts[0] === "dm";
-  const srv = isDm ? DM_SERVER : s.servers.find((x) => x.id === route.parts[0]) ?? s.servers[0];
+  const phone = usePhone();
+  const p0 = route.parts[0];
+  const tab: Tab = p0 === "dm" ? "messages" : p0 === "inbox" ? "inbox" : p0 === "you" ? "you" : "servers";
+  const isDm = tab === "messages";
+  const asked = route.parts[1]; // the channel / DM in the URL: on a phone, that's what opens the chat
+  const srv = isDm ? DM_SERVER : s.servers.find((x) => x.id === (tab === "servers" ? p0 : lastServer)) ?? s.servers.find((x) => x.id === lastServer) ?? s.servers[0];
   const dms = useMemo(() => dmThreads(s, now), [s, now]);
-  const dmId = isDm ? route.parts[1] ?? dms.find((d) => d.withGod)?.channelId ?? dms[0]?.channelId : undefined;
-  const ch: Channel | undefined = isDm ? (dmId ? { id: dmId, name: "dm", topic: "", tags: [] } : undefined) : srv.channels.find((c) => c.id === route.parts[1]) ?? srv.channels.find((c) => c.name === "general") ?? srv.channels[0];
+  const hasChat = tab === "servers" || isDm;
+  const open = hasChat && (!phone || !!asked);
+  // the chat layer always holds a conversation, so on a phone it can slide in from the right
+  const dmId = isDm ? asked ?? (lastDm || dms.find((d) => d.withGod)?.channelId || dms[0]?.channelId) : undefined;
+  const ch: Channel | undefined = isDm ? (dmId ? { id: dmId, name: "dm", topic: "", tags: [] } : undefined)
+    : tab === "servers" ? srv.channels.find((c) => c.id === asked) ?? srv.channels.find((c) => c.id === lastChannel.get(srv.id)) ?? srv.channels.find((c) => c.name === "general") ?? srv.channels[0] : undefined;
   const chId = ch?.id ?? "";
-  const [drawer, setDrawer] = useState(false);
+  useEffect(() => {
+    if (tab === "servers") { lastServer = srv.id; if (asked) lastChannel.set(srv.id, asked); }
+    if (isDm && asked) lastDm = asked;
+  }, [tab, srv.id, asked, isDm]);
   // Member panel is tied to the channel it was opened in, so navigating (e.g. into a DM) closes it.
   const [membersFor, setMembersFor] = useState<string | null>(null);
-  const members = !isDm && membersFor === chId;
+  const members = !isDm && open && membersFor === chId;
   const setMembers = (v: boolean | ((m: boolean) => boolean)) => setMembersFor((cur) => ((typeof v === "function" ? v(cur === chId) : v) ? chId : null));
-  const touch = useRef<{ x: number; y: number } | null>(null);
+  const [apps, setApps] = useState(false);
   const unread = unreadIndex(s, now, lastRead, now - 15 * 60e3);
+  const back = () => go(isDm ? "/lounge/dm" : `/lounge/${srv.id}`);
 
-  useEffect(() => { if (chId) markRead(chId); }, [chId, now]);
-  useEffect(() => { setFocus(chId ? { serverId: srv.id, channelId: chId } : undefined); return () => setFocus(undefined); }, [srv.id, chId]);
-
-  const onTouchStart = (e: React.TouchEvent) => { const t = e.touches[0]; touch.current = { x: t.clientX, y: t.clientY }; };
-  const onTouchEnd = (e: React.TouchEvent) => {
-    const st = touch.current; touch.current = null;
-    if (!st || window.innerWidth >= 768) return;
-    const t = e.changedTouches[0], dx = t.clientX - st.x, dy = t.clientY - st.y;
-    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6) return;
-    if (dx > 0) { if (members) setMembers(false); else setDrawer(true); }
-    else { if (drawer) setDrawer(false); else if (!isDm) setMembers(true); }
-  };
-  const close = () => { setDrawer(false); setMembers(false); };
+  useEffect(() => { if (chId && open) markRead(chId); }, [chId, now, open]);
+  useEffect(() => { setFocus(chId && open ? { serverId: srv.id, channelId: chId } : undefined); return () => setFocus(undefined); }, [srv.id, chId, open]);
   useEffect(() => {
-    if (!drawer && !members) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setDrawer(false); setMembersFor(null); } };
+    if (!members) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMembersFor(null); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [drawer, members]);
+  }, [members]);
+
+  // swipe right on the chat to go back to the list (it follows your finger); swipe left for the member list
+  const layer = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; y: number; dx: number; axis?: "x" | "y" } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => { if (!phone || !open) return; const t = e.touches[0]; drag.current = { x: t.clientX, y: t.clientY, dx: 0 }; };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const d = drag.current, el = layer.current;
+    if (!d || !el) return;
+    const t = e.touches[0], dx = t.clientX - d.x, dy = t.clientY - d.y;
+    if (!d.axis && Math.hypot(dx, dy) > 10) d.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
+    if (d.axis !== "x") return;
+    d.dx = dx;
+    if (dx > 0 && !members) { el.style.transition = "none"; el.style.transform = `translateX(${dx}px)`; }
+  };
+  const onTouchEnd = () => {
+    const d = drag.current, el = layer.current;
+    drag.current = null;
+    if (!d || d.axis !== "x" || !el) return;
+    el.style.transition = "";
+    if (d.dx > 0) {
+      if (members) { setMembers(false); el.style.transform = ""; return; }
+      if (d.dx > el.clientWidth * 0.28) { el.style.transform = "translateX(100%)"; haptic(6); back(); setTimeout(() => { if (layer.current) layer.current.style.transform = ""; }, 320); }
+      else el.style.transform = "";
+    } else if (d.dx < -60 && !isDm && !members) setMembers(true);
+  };
+
+  const chat = ch ? <ChannelView key={chId} s={s} srv={srv} ch={ch} now={now} lastReadAt={lastRead[chId] ?? now - 15 * 60e3} route={route} onMenu={back} onMembers={() => setMembers((m) => !m)} /> : null;
+  const list = tab === "servers"
+    ? <ChannelList s={s} srv={srv} chId={open ? chId : ""} now={now} unread={unread} />
+    : tab === "messages" ? (phone ? <MessagesScreen s={s} now={now} dms={dms} unread={unread} /> : <DmList s={s} now={now} chId={chId} dms={dms} unread={unread} />)
+      : tab === "inbox" ? <InboxScreen s={s} now={now} /> : <YouScreen s={s} />;
 
   return (
-    <div className="lounge relative flex h-full overflow-clip bg-[var(--chat)] text-fg" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      <nav aria-label="Servers and channels" className={clsx("flex shrink-0 bg-bg",
-        "max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[min(90vw,350px)] max-md:shadow-[8px_0_40px_rgba(0,0,0,0.5)] max-md:transition-transform max-md:duration-300 max-md:ease-[cubic-bezier(.2,.8,.2,1)]",
-        drawer ? "max-md:translate-x-0" : "max-md:-translate-x-[105%]")}>
-        <ServerRail s={s} srvId={srv.id} chId={chId} unread={unread} dms={dms} />
-        {isDm
-          ? <DmList s={s} now={now} chId={chId} dms={dms} unread={unread} onPick={() => setDrawer(false)} onClose={() => setDrawer(false)} />
-          : <ChannelList s={s} srv={srv} chId={chId} now={now} unread={unread} onPick={() => setDrawer(false)} onClose={() => setDrawer(false)} />}
-      </nav>
-      <div onClick={close} className={clsx("absolute inset-0 z-30 bg-black/60 backdrop-blur-[2px] transition-opacity duration-300 md:hidden", drawer || members ? "opacity-100" : "pointer-events-none opacity-0")} />
-      {ch
-        ? <ChannelView key={chId} s={s} srv={srv} ch={ch} now={now} lastReadAt={lastRead[chId] ?? now - 15 * 60e3} route={route} onMenu={() => setDrawer(true)} onMembers={() => setMembers((m) => !m)} />
-        : <EmptyDms onMenu={() => setDrawer(true)} />}
-      {!isDm && <MemberList s={s} srv={srv} chId={chId} now={now} open={members} onClose={() => setMembers(false)} />}
+    <div className="lounge relative flex h-full flex-col overflow-clip bg-[var(--chat)] text-fg">
+      <div className="relative flex min-h-0 flex-1">
+        <nav aria-label="Servers and channels" className={clsx("flex min-w-0 bg-bg", phone ? "flex-1" : tab === "inbox" || tab === "you" ? "flex-1" : "shrink-0")}>
+          {(!phone || tab === "servers") && <ServerRail s={s} srvId={tab === "servers" ? srv.id : tab === "messages" ? "dm" : ""} chId={open ? chId : ""} unread={unread} dms={dms} onApps={() => setApps(true)} />}
+          {list}
+        </nav>
+        {hasChat && (
+          <div ref={layer} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}
+            aria-hidden={phone && !open ? true : undefined} inert={phone && !open ? true : undefined}
+            className={phone
+              ? clsx("absolute inset-0 z-20 flex touch-pan-y bg-[var(--chat)] shadow-[-12px_0_32px_rgba(0,0,0,0.35)] transition-[transform,visibility] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]", open ? "visible translate-x-0" : "invisible translate-x-full")
+              : "flex min-w-0 flex-1"}>
+            {chat ?? <EmptyDms onMenu={back} />}
+          </div>
+        )}
+        {phone && <div onClick={() => setMembers(false)} className={clsx("absolute inset-0 z-30 bg-black/60 transition-opacity duration-300", members ? "opacity-100" : "pointer-events-none opacity-0")} />}
+        {!isDm && hasChat && ch && <MemberList s={s} srv={srv} chId={chId} now={now} open={members} onClose={() => setMembers(false)} />}
+      </div>
+      {phone && !open && <TabBar s={s} tab={tab} now={now} unread={unread} dms={dms} />}
+      {apps && <AppSheet onClose={() => setApps(false)} />}
+    </div>
+  );
+}
+
+/* ------------------------------ bottom tabs ------------------------------ */
+
+function TabBar({ s, tab, now, unread, dms }: { s: WorldState; tab: Tab; now: number; unread: Map<string, UnreadInfo>; dms: ReturnType<typeof dmThreads> }) {
+  let serverMentions = 0;
+  for (const x of s.servers) for (const c of x.channels) serverMentions += unread.get(c.id)?.mentions ?? 0;
+  const dmUnread = dms.filter((d) => d.withGod).reduce((a, d) => a + (unread.get(d.channelId)?.n ?? 0), 0);
+  const inbox = s.notifications.filter((n) => !n.read && n.t <= now && n.kind === "mention").length;
+  const items: [Tab, string, React.ReactNode, string, number][] = [
+    ["servers", "Servers", <MessagesSquare key="i" className="size-6" />, `/lounge/${lastServer || s.servers[0].id}`, serverMentions],
+    ["messages", "Messages", <MessageCircle key="i" className="size-6" />, "/lounge/dm", dmUnread],
+    ["inbox", "Notifications", <Bell key="i" className="size-6" />, "/lounge/inbox", inbox],
+    ["you", "You", <Avatar key="i" src={who(s, "god").avatar} size={26} />, "/lounge/you", 0],
+  ];
+  return (
+    <nav aria-label="Lounge tabs" className="flex shrink-0 border-t border-black/30 bg-bg pb-[env(safe-area-inset-bottom)]">
+      {items.map(([id, label, icon, href, n]) => (
+        <button key={id} aria-label={`${label}${n ? `, ${n} unread` : ""}`} aria-current={tab === id ? "page" : undefined} onClick={() => { haptic(5); go(href); }}
+          className={clsx("relative flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold active:scale-95", tab === id ? "text-[var(--header)]" : "text-muted")}>
+          <span className={clsx("relative", tab === id && id === "you" && "rounded-full ring-2 ring-[var(--header)]")}>{icon}
+            {n > 0 && <span data-badge={`lounge-${id}`} className="absolute -right-2.5 -top-1 min-w-[18px] rounded-full border-[3px] border-bg bg-down px-1 text-center text-[10px] font-bold leading-[12px] text-white">{n > 99 ? "99+" : n}</span>}
+          </span>
+          {label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/* the rest of the GOD internet, from the crown at the top of the server rail */
+const APPS: [string, string, typeof Bell][] = [["/chirp", "Chirp", Feather], ["/platforms", "Platforms", Globe2], ["/news", "News", Newspaper], ["/dashboard", "Empire", LayoutDashboard], ["/god", "GOD MODE", Crown], ["/events", "Events", Zap], ["/search", "Search", Search], ["/alerts", "Alerts", Bell], ["/settings", "Settings", Cog]];
+
+function AppGrid({ onPick }: { onPick?: () => void }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {APPS.map(([href, label, I]) => (
+        <button key={href} onClick={() => { haptic(5); onPick?.(); go(href); }} className={clsx("flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl bg-[var(--chat)] text-[13px] font-semibold active:scale-95", label === "GOD MODE" && "text-gold")}>
+          <I className="size-5" />{label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AppSheet({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div role="dialog" aria-label="GOD apps" onClick={(e) => e.stopPropagation()} className="sheet-spring absolute inset-x-0 bottom-0 rounded-t-2xl bg-surface p-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:left-1/2 md:w-[420px] md:-translate-x-1/2 md:rounded-2xl">
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-[var(--surface-3)]" />
+        <div className="mb-3 flex items-center justify-between px-1">
+          <span className="flex items-center gap-2 text-[17px] font-bold text-[var(--header)]"><Crown className="size-5 text-gold" />The rest of the internet</span>
+          <button aria-label="Close" onClick={onClose} className="grid size-11 place-items-center rounded-full bg-[var(--surface-3)]"><X className="size-4" /></button>
+        </div>
+        <AppGrid onPick={onClose} />
+        <button onClick={() => { onClose(); lock(); }} className="mt-2 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[var(--chat)] text-[14px] font-semibold text-muted"><Lock className="size-4" />Switch profile</button>
+      </div>
     </div>
   );
 }
@@ -82,17 +205,21 @@ export function Lounge({ route }: { route: Route }) {
 
 function Pill({ n, mention }: { n: number; mention?: boolean }) {
   if (!n) return null;
-  return <span className={clsx("badge-bump num min-w-[18px] rounded-full px-1.5 text-center text-[10px] font-bold leading-[18px]", mention ? "bg-down text-white" : "bg-gold text-[#1a1406]")}>{n > 99 ? "99+" : n}</span>;
+  return <span className={clsx("badge-bump min-w-[22px] rounded-full border-[3px] border-bg px-1 text-center text-[11px] font-bold leading-[14px]", mention ? "bg-down text-white" : "bg-gold text-[#1a1406]")}>{n > 99 ? "99+" : n}</span>;
 }
 
-function ServerRail({ s, srvId, chId, unread, dms }: { s: WorldState; srvId: string; chId: string; unread: Map<string, UnreadInfo>; dms: ReturnType<typeof dmThreads> }) {
+function ServerRail({ s, srvId, chId, unread, dms, onApps }: { s: WorldState; srvId: string; chId: string; unread: Map<string, UnreadInfo>; dms: ReturnType<typeof dmThreads>; onApps: () => void }) {
   const dmMentions = dms.filter((d) => d.withGod && d.channelId !== chId).reduce((a, d) => a + (unread.get(d.channelId)?.n ?? 0), 0);
   return (
     <div className="no-scrollbar flex w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-bg py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-      <button aria-label={`Direct messages${dmMentions ? `, ${dmMentions} unread` : ""}`} onClick={() => go("/lounge/dm")} className="relative mb-0.5 flex flex-col items-center gap-1 active:scale-95">
-        <span className={clsx("grid size-12 place-items-center bg-gradient-to-br from-gold to-[#b9832a] text-[#1a1406] shadow-[0_6px_20px_rgb(var(--glow)/0.25)] transition-all duration-200", srvId === "dm" ? "rounded-2xl" : "rounded-full")}><MessagesSquare className="size-5" /></span>
-        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-gold">Lounge</span>
-        {dmMentions > 0 && <span className="absolute -right-1 top-7"><Pill n={dmMentions} mention /></span>}
+      {/* phones: the crown opens the rest of GOD (Messages has its own tab); desktop: direct messages, like chat apps */}
+      <button aria-label="GOD apps" onClick={() => { haptic(5); onApps(); }} className="group relative flex w-full justify-center active:scale-95 md:hidden">
+        <span className="grid size-12 place-items-center rounded-[16px] bg-gradient-to-br from-[#fff3c4] via-gold to-[#8a6416] text-[#120c02]"><Crown className="size-6" /></span>
+      </button>
+      <button aria-label={`Direct messages${dmMentions ? `, ${dmMentions} unread` : ""}`} onClick={() => go("/lounge/dm")} className="group relative flex w-full justify-center active:scale-95 max-md:hidden">
+        <span className={clsx("absolute left-0 top-1/2 w-1 -translate-y-1/2 rounded-r-full bg-[var(--header)] transition-all duration-200", srvId === "dm" ? "h-9" : "h-0 group-hover:h-5")} />
+        <span className={clsx("grid size-12 place-items-center bg-gradient-to-br from-[#fff3c4] via-gold to-[#8a6416] text-[#120c02] transition-all duration-200", srvId === "dm" ? "rounded-[16px]" : "rounded-[24px] group-hover:rounded-[16px]")}><Crown className="size-6" /></span>
+        {dmMentions > 0 && <span className="absolute bottom-0 right-2"><Pill n={dmMentions} mention /></span>}
       </button>
       <div className="h-0.5 w-8 rounded-full bg-[var(--surface-3)]" />
       {s.servers.map((x) => {
@@ -116,24 +243,24 @@ function ServerRail({ s, srvId, chId, unread, dms }: { s: WorldState; srvId: str
 
 const groupOf = (c: Channel) => (c.announce ? "Information" : /general|chat|off-?topic|lounge|meme|welcome|intro|vc|hangout/i.test(c.name) ? "Community" : "Topics");
 
-function ChannelList({ s, srv, chId, now, unread, onPick, onClose }: { s: WorldState; srv: Server; chId: string; now: number; unread: Map<string, UnreadInfo>; onPick: () => void; onClose: () => void }) {
+function ChannelList({ s, srv, chId, now, unread }: { s: WorldState; srv: Server; chId: string; now: number; unread: Map<string, UnreadInfo> }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const groups = ["Information", "Community", "Topics"].map((g) => [g, srv.channels.filter((c) => groupOf(c) === g)] as const).filter(([, cs]) => cs.length);
   const slot = Math.floor(now / 15000);
   const seen = useMemo(() => lastSeenMap(s, slot * 15000, srv.id, 3000), [s, srv.id, slot]);
   const online = srv.members.reduce((a, id) => a + (presenceOf(s.characters[Number(id.slice(1))], seen.get(id), now) === "online" ? 1 : 0), 0);
+  const shown = Math.round(online * (srv.memberCount / Math.max(1, srv.members.length)) * 0.12) + online; // the visible crowd is bigger than the speaking cast
   return (
-    <aside className="flex w-full min-w-0 flex-col rounded-tl-2xl bg-surface md:w-[248px] md:rounded-none">
-      <div className="relative overflow-hidden border-b border-black/20 p-4 pt-[max(1.25rem,env(safe-area-inset-top))] shadow-[0_1px_0_rgba(0,0,0,0.2)]">
-        <div className="pointer-events-none absolute inset-0 opacity-40" style={{ background: `radial-gradient(120% 90% at 0% 0%, ${srv.color}, transparent 70%)` }} />
-        <div className="relative flex items-start justify-between gap-2">
-          <h2 className="truncate text-[17px] font-bold tracking-tight">{srv.icon} {srv.name}</h2>
-          <button aria-label="Close" className="grid size-11 shrink-0 place-items-center rounded-full bg-black/30 md:hidden" onClick={onClose}><X className="size-4" /></button>
-        </div>
-        <p className="relative mt-1 line-clamp-2 text-[12px] text-muted">{srv.description}</p>
-        <div className="relative mt-2 flex items-center gap-3 text-[11px] text-muted">
-          <span><span className="mr-1 inline-block size-2 rounded-full bg-up" />{online} regulars online</span>
-          <span>{fmtCount(srv.memberCount)} members</span>
+    <aside className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-tl-2xl bg-surface md:w-[248px] md:flex-none md:rounded-none">
+      <div className="relative shrink-0">
+        <div className="h-[72px] pt-[env(safe-area-inset-top)] md:h-14" style={{ background: `linear-gradient(120deg, ${srv.color}, color-mix(in srgb, ${srv.color} 35%, #111214))` }} />
+        <div className="px-4 pb-3 pt-2.5">
+          <h2 className="flex items-center gap-1 truncate text-[20px] font-extrabold text-[var(--header)]"><span className="truncate">{srv.icon} {srv.name}</span><ChevronRight className="size-5 shrink-0 text-muted" /></h2>
+          <div className="mt-0.5 flex items-center gap-3 text-[13px] text-muted">
+            <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-up" />{fmtCount(shown)} Online</span>
+            <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-muted" />{fmtCount(srv.memberCount)} Members</span>
+          </div>
+          <button onClick={() => go(`/search?q=${encodeURIComponent(srv.name)}`)} className="mt-3 flex min-h-[44px] w-full items-center gap-2 rounded-full bg-bg px-3 text-[15px] text-muted"><Search className="size-4" />Search</button>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -141,7 +268,7 @@ function ChannelList({ s, srv, chId, now, unread, onPick, onClose }: { s: WorldS
           const shut = collapsed[label];
           return (
             <div key={label}>
-              <button aria-expanded={!shut} onClick={() => setCollapsed((c) => ({ ...c, [label]: !c[label] }))} className="flex min-h-[44px] w-full items-center gap-1 px-1 pt-2 text-[12px] font-semibold uppercase tracking-[0.02em] text-muted hover:text-fg">
+              <button aria-expanded={!shut} onClick={() => setCollapsed((c) => ({ ...c, [label]: !c[label] }))} className="flex min-h-[44px] w-full items-center gap-1 px-1 pt-2 text-[12px] font-bold uppercase tracking-[0.02em] text-muted hover:text-fg">
                 <ChevronDown className={clsx("size-3 transition-transform duration-200", shut && "-rotate-90")} />{label}
               </button>
               {cs.map((c) => {
@@ -149,10 +276,10 @@ function ChannelList({ s, srv, chId, now, unread, onPick, onClose }: { s: WorldS
                 const on = c.id === chId;
                 if (shut && !on && !u?.mentions) return null;
                 return (
-                  <button key={c.id} onClick={() => { haptic(5); go(`/lounge/${srv.id}/${c.id}`); onPick(); }} aria-current={on ? "page" : undefined}
+                  <button key={c.id} onClick={() => { haptic(5); go(`/lounge/${srv.id}/${c.id}`); }} aria-current={on ? "page" : undefined} aria-label={`${c.name}${u?.mentions ? `, ${u.mentions} mention${u.mentions > 1 ? "s" : ""}` : u ? ", unread" : ""}`}
                     className={clsx("relative flex min-h-[44px] w-full items-center gap-2 rounded-md px-2.5 text-[16px] font-medium transition-colors md:min-h-[34px] md:text-[15px]", on ? "bg-[var(--selected)] text-[var(--header)]" : u ? "font-semibold text-[var(--header)] hover:bg-surface-2" : "text-muted hover:bg-surface-2 hover:text-fg")}>
-                    {u && !on && <span className="absolute -left-2 h-2 w-1 rounded-r-full bg-fg" />}
-                    {c.announce ? <Megaphone className="size-4 shrink-0 opacity-70" /> : <Hash className="size-4 shrink-0 opacity-70" />}
+                    {u && !on && <span className="absolute -left-2 h-2 w-1 rounded-r-full bg-[var(--header)]" />}
+                    {c.announce ? <Megaphone className="size-5 shrink-0 opacity-70" /> : <Hash className="size-5 shrink-0 opacity-70" />}
                     <span className="truncate">{c.name}</span>
                     <span className="ml-auto">{u?.mentions ? <Pill n={u.mentions} mention /> : null}</span>
                   </button>
@@ -163,7 +290,7 @@ function ChannelList({ s, srv, chId, now, unread, onPick, onClose }: { s: WorldS
         })}
         <VoiceList s={s} srv={srv} now={now} />
       </div>
-      <MeBar s={s} />
+      <div className="max-md:hidden"><MeBar s={s} /></div>
     </aside>
   );
 }
@@ -247,42 +374,150 @@ function MeBar({ s }: { s: WorldState }) {
 
 /* -------------------------------- DMs ---------------------------------- */
 
-function DmList({ s, now, chId, dms, unread, onPick, onClose }: { s: WorldState; now: number; chId: string; dms: ReturnType<typeof dmThreads>; unread: Map<string, UnreadInfo>; onPick: () => void; onClose: () => void }) {
-  const mine = dms.filter((d) => d.withGod), others = dms.filter((d) => !d.withGod).slice(0, 25);
-  const item = (d: (typeof dms)[number]) => {
-    const ids = d.channelId.split(":").slice(1);
-    const peer = d.withGod ? who(s, dmPeer(d.channelId)) : who(s, ids[0]);
-    const other = d.withGod ? undefined : who(s, ids[1]);
-    const u = d.channelId === chId ? undefined : unread.get(d.channelId);
-    const lastBy = d.last.authorId === "god" ? "You: " : !d.withGod ? `${who(s, d.last.authorId).name}: ` : "";
-    return (
-      <button key={d.channelId} onClick={() => { go(`/lounge/dm/${d.channelId}`); onPick(); }} className={clsx("flex min-h-[52px] w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left", d.channelId === chId ? "bg-gold/10" : "hover:bg-surface-2")}>
-        <span className="relative shrink-0">
-          <Avatar src={peer.avatar} size={36} />
-          {other && <Avatar src={other.avatar} size={20} className="absolute -bottom-1 -right-1 ring-2 ring-surface" />}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className={clsx("block truncate text-[14px]", u ? "font-bold" : "font-medium")}>{peer.name}{other ? ` & ${other.name}` : ""}</span>
-          <span className="block truncate text-[12px] text-muted">{lastBy}{textAt(d.last, now)}</span>
-        </span>
-        <span className="flex shrink-0 flex-col items-end gap-1"><span className="text-[10px] text-muted">{relTime(d.last.t, now)}</span>{u && d.withGod ? <Pill n={u.n} mention /> : null}</span>
-      </button>
-    );
-  };
+function DmRow({ s, d, now, active, u }: { s: WorldState; d: ReturnType<typeof dmThreads>[number]; now: number; active?: boolean; u?: UnreadInfo }) {
+  const ids = d.channelId.split(":").slice(1);
+  const peer = d.withGod ? who(s, dmPeer(d.channelId)) : who(s, ids[0]);
+  const other = d.withGod ? undefined : who(s, ids[1]);
+  const lastBy = d.last.authorId === "god" ? "You: " : !d.withGod ? `${who(s, d.last.authorId).name}: ` : "";
+  const unreadHere = u && d.withGod ? u.n : 0;
   return (
-    <aside className="flex w-full min-w-0 flex-col border-r border-line bg-surface md:w-[268px]">
-      <div className="flex items-center justify-between border-b border-line p-4 pt-5">
-        <h2 className="text-[17px] font-bold">Direct messages</h2>
-        <button aria-label="Close" className="grid size-11 place-items-center rounded-full bg-surface-3 md:hidden" onClick={onClose}><X className="size-4" /></button>
-      </div>
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
-        <div className="px-2 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Your DMs</div>
-        {mine.length ? mine.map(item) : <p className="px-2 py-2 text-[12.5px] text-muted">No DMs yet. Open someone&apos;s profile or the member list and tap Message.</p>}
-        {others.length > 0 && <div className="flex items-center gap-1.5 px-2 pb-1 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted"><Eye className="size-3" /> God sees every DM</div>}
-        {others.map(item)}
+    <button onClick={() => go(`/lounge/dm/${d.channelId}`)} className={clsx("flex min-h-[64px] w-full items-center gap-3 rounded-lg px-2 py-2 text-left", active ? "bg-[var(--selected)]" : "active:bg-surface-2 md:hover:bg-surface-2")}>
+      <span className="relative shrink-0">
+        <Avatar src={peer.avatar} size={40} />
+        {other ? <Avatar src={other.avatar} size={20} className="absolute -bottom-1 -right-1 ring-2 ring-[var(--surface)]" /> : <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-[3px] border-[var(--surface)] bg-up" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-2">
+          <span className={clsx("truncate text-[16px]", unreadHere ? "font-bold text-[var(--header)]" : "font-semibold text-fg")}>{peer.name}{other ? ` & ${other.name}` : ""}</span>
+          <span className="ml-auto shrink-0 text-[12px] text-muted">{relTime(d.last.t, now)}</span>
+        </span>
+        <span className="flex items-center gap-2">
+          <span className={clsx("truncate text-[14px]", unreadHere ? "text-fg" : "text-muted")}>{lastBy}{textAt(d.last, now) || (d.last.meme ? "sent an image" : "")}</span>
+          {unreadHere > 0 && <span className="ml-auto"><Pill n={unreadHere} mention /></span>}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function DmList({ s, now, chId, dms, unread }: { s: WorldState; now: number; chId: string; dms: ReturnType<typeof dmThreads>; unread: Map<string, UnreadInfo> }) {
+  const mine = dms.filter((d) => d.withGod), others = dms.filter((d) => !d.withGod).slice(0, 25);
+  return (
+    <aside className="flex w-[300px] min-w-0 flex-col bg-surface">
+      <div className="flex h-12 items-center border-b border-black/25 px-4 shadow-[0_1px_0_rgba(0,0,0,0.12)]"><h2 className="text-[16px] font-bold text-[var(--header)]">Direct Messages</h2></div>
+      <div className="flex-1 overflow-y-auto px-2 pb-2 pt-2">
+        {mine.length ? mine.map((d) => <DmRow key={d.channelId} s={s} d={d} now={now} active={d.channelId === chId} u={d.channelId === chId ? undefined : unread.get(d.channelId)} />) : <p className="px-2 py-2 text-[13px] text-muted">No DMs yet. Open someone&apos;s profile or the member list and tap Message.</p>}
+        {others.length > 0 && <div className="flex items-center gap-1.5 px-2 pb-1 pt-4 text-[12px] font-bold uppercase text-muted"><Eye className="size-3.5" /> God sees every DM</div>}
+        {others.map((d) => <DmRow key={d.channelId} s={s} d={d} now={now} active={d.channelId === chId} />)}
       </div>
       <MeBar s={s} />
     </aside>
+  );
+}
+
+/** phone: the Messages tab (search, who's active now, conversations) */
+function MessagesScreen({ s, now, dms, unread }: { s: WorldState; now: number; dms: ReturnType<typeof dmThreads>; unread: Map<string, UnreadInfo> }) {
+  const [q, setQ] = useState("");
+  const slot = Math.floor(now / 15000);
+  const active = useMemo(() => {
+    const seen = lastSeenMap(s, slot * 15000, undefined, 3000);
+    return s.characters.filter((c) => c.core && presenceOf(c, seen.get(c.id), slot * 15000) === "online").sort((a, b) => (b.bond ?? 0) - (a.bond ?? 0)).slice(0, 14);
+  }, [s, slot]);
+  const match = (d: ReturnType<typeof dmThreads>[number]) => !q.trim() || d.channelId.split(":").slice(1).some((id) => { const x = who(s, id); return x.name.toLowerCase().includes(q.toLowerCase()) || x.handle.toLowerCase().includes(q.toLowerCase()); });
+  const mine = dms.filter((d) => d.withGod && match(d)), others = dms.filter((d) => !d.withGod && match(d)).slice(0, 25);
+  return (
+    <section className="flex min-w-0 flex-1 flex-col bg-surface">
+      <div className="px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <h1 className="text-[24px] font-extrabold text-[var(--header)]">Messages</h1>
+        <label className="mt-2 flex items-center gap-2 rounded-full bg-bg px-3 text-muted"><Search className="size-4 shrink-0" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search messages" className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] text-fg outline-none placeholder:text-muted" /></label>
+      </div>
+      <div className="flex-1 overflow-y-auto pb-2">
+        {active.length > 0 && !q && (
+          <div className="mb-1">
+            <div className="px-4 pb-1 pt-1 text-[12px] font-bold uppercase text-muted">Active now</div>
+            <div data-scroll-x className="no-scrollbar flex gap-3 overflow-x-auto px-4 pb-2">
+              {active.map((c) => (
+                <button key={c.id} aria-label={`Message ${c.displayName}`} onClick={() => go(`/lounge/dm/${dmChannel("god", c.id)}`)} className="flex w-14 shrink-0 flex-col items-center gap-1 active:scale-95">
+                  <span className="relative"><Avatar src={who(s, c.id).avatar} size={52} /><span className="absolute bottom-0 right-0 size-4 rounded-full border-[3px] border-[var(--surface)] bg-up" /></span>
+                  <span className="w-full truncate text-center text-[12px] text-muted">{c.displayName.split(" ")[0]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="px-2">
+          {mine.map((d) => <DmRow key={d.channelId} s={s} d={d} now={now} u={unread.get(d.channelId)} />)}
+          {!mine.length && <p className="px-2 py-3 text-[14px] text-muted">{q ? "Nobody by that name." : "No DMs yet. Tap someone above, or Message from the member list."}</p>}
+          {others.length > 0 && <div className="flex items-center gap-1.5 px-2 pb-1 pt-4 text-[12px] font-bold uppercase text-muted"><Eye className="size-3.5" /> God sees every DM</div>}
+          {others.map((d) => <DmRow key={d.channelId} s={s} d={d} now={now} />)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** the Notifications tab: mentions and replies first, then everything else that happened */
+function InboxScreen({ s, now }: { s: WorldState; now: number }) {
+  const [only, setOnly] = useState<"all" | "mentions">("all");
+  const list = s.notifications.filter((n) => n.t <= now && (only === "all" || n.kind === "mention")).slice(-150).reverse();
+  useEffect(() => () => { editWorld((x) => { const t = Date.now(); x.notifications.forEach((n) => { if (n.t <= t) n.read = true; }); }); }, []);
+  return (
+    <section className="flex min-w-0 flex-1 flex-col bg-surface">
+      <div className="px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <h1 className="text-[24px] font-extrabold text-[var(--header)]">Notifications</h1>
+        <div className="mt-2 flex gap-2">
+          {(["all", "mentions"] as const).map((k) => <button key={k} aria-pressed={only === k} onClick={() => setOnly(k)} className={clsx("min-h-[44px] rounded-full px-4 text-[14px] font-semibold", only === k ? "bg-[var(--selected)] text-[var(--header)]" : "bg-bg text-muted")}>{k === "all" ? "For you" : "Mentions"}</button>)}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 pb-2">
+        {list.map((n) => {
+          const handle = /^@([\w.]+)/.exec(n.text)?.[1];
+          const c = handle ? s.characters.find((x) => x.username === handle) : undefined;
+          const rest = handle ? n.text.slice(handle.length + 1) : n.text;
+          return (
+            <button key={n.id} onClick={() => linkTo(n.link)} className={clsx("flex w-full items-start gap-3 rounded-lg px-2 py-2.5 text-left active:bg-surface-2 md:hover:bg-surface-2", !n.read && "bg-white/[0.035]")}>
+              {c ? <Avatar src={who(s, c.id).avatar} size={40} /> : <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--surface-3)] text-gold">{n.kind === "mention" ? <AtSign className="size-5" /> : n.kind === "news" ? <Newspaper className="size-5" /> : n.kind === "money" ? <Crown className="size-5" /> : <Bell className="size-5" />}</span>}
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] leading-snug text-fg">{c ? <><b className="text-[var(--header)]">{c.displayName}</b>{rest}</> : n.text}</span>
+                <span className="text-[12px] text-muted">{relTime(n.t, now)}</span>
+              </span>
+              {!n.read && <span className="mt-2 size-2.5 shrink-0 rounded-full bg-down" />}
+            </button>
+          );
+        })}
+        {!list.length && <p className="p-6 text-center text-[14px] text-muted">Nothing yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+/** the You tab: your profile card, and the way to the rest of GOD */
+function YouScreen({ s }: { s: WorldState }) {
+  const me = who(s, "god");
+  return (
+    <section className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-surface">
+      <div className="relative h-[120px] shrink-0 bg-gradient-to-br from-[#fff3c4] via-gold to-[#8a6416] pt-[env(safe-area-inset-top)]">
+        <button aria-label="Settings" onClick={() => go("/settings")} className="absolute right-3 top-[max(0.5rem,env(safe-area-inset-top))] grid size-11 place-items-center rounded-full bg-black/35 text-white"><Cog className="size-5" /></button>
+      </div>
+      <div className="px-4">
+        <span className="relative -mt-12 inline-block rounded-full border-[6px] border-[var(--surface)]"><Avatar src={me.avatar} size={84} /><span className="absolute bottom-1 right-1 size-5 rounded-full border-[4px] border-[var(--surface)] bg-up" /></span>
+        <h1 className="text-[24px] font-extrabold leading-tight text-[var(--header)]">{me.name}</h1>
+        <div className="text-[15px] text-fg">god <span className="text-muted">· online</span></div>
+        <button onClick={() => go("/settings")} className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[var(--selected)] text-[15px] font-semibold text-[var(--header)]"><Pencil className="size-4" />Edit Profile</button>
+        <div className="mt-3 rounded-xl bg-[var(--chat)] p-4">
+          <div className="text-[12px] font-bold uppercase text-muted">About me</div>
+          <p className="mt-1 text-[15px] text-fg">The main character of the internet.</p>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div><div className="text-[16px] font-bold text-[var(--header)]">{fmtCount(s.player.followers)}</div><div className="text-[12px] text-muted">Followers</div></div>
+            <div><div className="text-[16px] font-bold text-[var(--header)]">{Math.round(s.player.reputation)}</div><div className="text-[12px] text-muted">Reputation</div></div>
+            <div><div className="text-[16px] font-bold text-[var(--header)]">{Math.round(s.player.influence)}</div><div className="text-[12px] text-muted">Influence</div></div>
+          </div>
+        </div>
+        <div className="mb-2 mt-4 text-[12px] font-bold uppercase text-muted">The rest of the internet</div>
+        <AppGrid />
+        <button onClick={() => lock()} className="mb-6 mt-2 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[var(--chat)] text-[14px] font-semibold text-muted"><Lock className="size-4" />Switch profile</button>
+      </div>
+    </section>
   );
 }
 
@@ -290,7 +525,7 @@ function EmptyDms({ onMenu }: { onMenu: () => void }) {
   return (
     <section className="grid min-w-0 flex-1 place-items-center p-6 text-center">
       <div>
-        <button aria-label="Open channels" onClick={onMenu} className="mx-auto mb-3 grid size-11 place-items-center rounded-full bg-surface-3 md:hidden"><Menu className="size-5" /></button>
+        <button aria-label="Open channels" onClick={onMenu} className="mx-auto mb-3 grid size-11 place-items-center rounded-full bg-surface-3 md:hidden"><ChevronLeft className="size-6" /></button>
         <MessageCircle className="mx-auto size-10 text-gold" />
         <p className="mt-2 text-[14px] text-muted">Pick a conversation, or message someone from the member list.</p>
       </div>
@@ -351,6 +586,8 @@ function ChannelView({ s, srv, ch, now, lastReadAt, route, onMenu, onMembers }: 
   const [text, setText] = useState("");
   const [sel, setSel] = useState<string>();
   const [sheet, setSheet] = useState<string>(); // phone: long-press action sheet for this message
+  const [compose, setCompose] = useState(false); // the + / emoji tray under the composer
+  const input = useRef<HTMLInputElement>(null);
   const [reply, setReply] = useState<Message>();
   const [editing, setEditing] = useState<Message>();
   const [picker, setPicker] = useState<string>();
@@ -468,11 +705,13 @@ function ChannelView({ s, srv, ch, now, lastReadAt, route, onMenu, onMembers }: 
   return (
     <section className="chat-pane relative flex min-w-0 flex-1 flex-col" onClick={() => { setSel(undefined); setPicker(undefined); }}>
       <header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center gap-1 border-b border-black/25 px-1 pt-[env(safe-area-inset-top)] shadow-[0_1px_0_rgba(0,0,0,0.12)] md:h-12 md:px-3 md:pt-0">
-        <button aria-label="Open channels" onClick={(e) => { e.stopPropagation(); onMenu(); }} className="grid size-11 place-items-center rounded-full text-muted hover:bg-surface-2 md:hidden"><Menu className="size-5" /></button>
-        {isDm ? <Avatar src={peer!.avatar} size={26} /> : ch.announce ? <Megaphone className="size-5 shrink-0 text-muted" /> : <Hash className="size-5 shrink-0 text-muted" />}
+        <button aria-label="Open channels" onClick={(e) => { e.stopPropagation(); onMenu(); }} className="grid size-11 shrink-0 place-items-center rounded-full text-[var(--header)] active:bg-surface-2 md:hidden"><ChevronLeft className="size-7" /></button>
+        {isDm
+          ? <span className="relative shrink-0"><Avatar src={peer!.avatar} size={28} /><span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-[var(--chat)] bg-up" /></span>
+          : ch.announce ? <Megaphone className="size-5 shrink-0 text-muted" /> : <Hash className="size-6 shrink-0 text-muted" />}
         <div className="min-w-0 flex-1 pl-1 leading-tight">
-          <div className="truncate text-[16px] font-bold text-[var(--header)]">{title}</div>
-          <div className="truncate text-[12px] text-muted">{isDm ? (withGod ? `@${peer!.handle}` : "A DM you're not part of") : `${srv.icon} ${srv.name} · ${ch.topic}`}</div>
+          <div className="flex items-center gap-0.5 text-[17px] font-bold text-[var(--header)]"><span className="truncate">{title}</span><ChevronRight className="size-4 shrink-0 text-muted md:hidden" /></div>
+          <div className="truncate text-[12px] text-muted max-md:hidden">{isDm ? (withGod ? `@${peer!.handle}` : "A DM you're not part of") : `${srv.icon} ${srv.name} · ${ch.topic}`}</div>
         </div>
         <button aria-label="Search messages" onClick={(e) => { e.stopPropagation(); setPanel(panel === "search" ? undefined : "search"); }} className={clsx("grid size-11 place-items-center rounded-full hover:bg-surface-2", panel === "search" ? "text-[var(--header)]" : "text-muted")}><Search className="size-5" /></button>
         {!isDm && <button aria-label={`Pinned messages (${pins.length})`} onClick={(e) => { e.stopPropagation(); setPanel(panel === "pins" ? undefined : "pins"); }} className={clsx("relative grid size-11 place-items-center rounded-full hover:bg-surface-2", panel === "pins" ? "text-[var(--header)]" : "text-muted")}><Pin className="size-5" />{pins.length > 0 && <span className="num absolute right-1.5 top-1.5 text-[9px] font-bold text-gold">{pins.length}</span>}</button>}
@@ -502,7 +741,7 @@ function ChannelView({ s, srv, ch, now, lastReadAt, route, onMenu, onMembers }: 
             const newDay = !prev || dayOnly(prev.t, now) !== dayOnly(m.t, now);
             return (
               <Row key={m.id} s={s} srv={srv} m={m} text={txt} edited={isEdited(m, now)} rx={rx} rxSig={rx.map((r) => `${r.emoji}${r.count}${r.me ? "*" : ""}`).join("")}
-                parent={parent} parentText={parent ? textAt(parent, now) : undefined} grouped={grouped} dayLabel={newDay ? dayOnly(m.t, now) : undefined} showNew={showNew}
+                parent={parent} parentText={parent ? textAt(parent, now) : undefined} grouped={grouped} dayLabel={newDay ? fullDate(m.t) : undefined} stamp={dayLabel(m.t, now)} showNew={showNew}
                 fresh={now - m.t < 6000} flash={jump === m.id} selected={sel === m.id} picker={picker === m.id} threadCount={threadCounts.get(m.id) ?? 0} pinned={!!m.pinnedAt && m.pinnedAt <= now}
                 canWrite={withGod && !ch.announce}
                 onSelect={() => { haptic(4); setSel(sel === m.id ? undefined : m.id); setPicker(undefined); }}
@@ -524,6 +763,14 @@ function ChannelView({ s, srv, ch, now, lastReadAt, route, onMenu, onMembers }: 
       )}
 
       <div className="relative px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-4 md:pb-3" onClick={(e) => e.stopPropagation()}>
+        <div className="h-5 px-1 text-[12px] text-muted" aria-live="polite">
+          {typing.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="typing-dots"><i /><i /><i /></span>
+              <span className="truncate [&_b]:font-semibold [&_b]:text-[var(--header)]">{typingLabel(typing)}</span>
+            </span>
+          )}
+        </div>
         {suggestions.length > 0 && (
           <div className="pop absolute inset-x-3 bottom-full mb-1 overflow-hidden rounded-lg bg-surface shadow-2xl md:inset-x-4">
             {suggestions.map((c) => (
@@ -541,22 +788,31 @@ function ChannelView({ s, srv, ch, now, lastReadAt, route, onMenu, onMembers }: 
           </div>
         )}
         {withGod ? (
-          <div className={clsx("flex items-center gap-1.5 bg-surface-3 pl-4 pr-0.5", reply || editing ? "rounded-b-[22px]" : "rounded-[22px]")}>
-            <input value={text} disabled={ch.announce} aria-label={`Message ${isDm ? title : `#${ch.name}`}`} onChange={(e) => onType(e.target.value)} onFocus={() => { stick.current = true; if (text.trim() && !isDm && !editing) doTyping(srv.id, ch.id); }}
-              onKeyDown={(e) => { if (e.key === "Enter") send(); if (e.key === "Escape") { setReply(undefined); setEditing(undefined); } if (e.key === "ArrowUp" && !text) { const mine = [...msgs].reverse().find((m) => m.authorId === "god" && !m.deleted); if (mine) startEdit(mine); } }}
-              enterKeyHint="send" autoComplete="off"
-              placeholder={ch.announce ? "Only mods can post in announcements" : isDm ? `Message @${peer!.handle}` : `Message #${ch.name}`} className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] text-fg outline-none placeholder:text-muted md:text-[15px]" />
-            <button aria-label={editing ? "Save edit" : "Send"} onClick={send} disabled={!text.trim()} className={clsx("grid size-11 shrink-0 place-items-center rounded-full transition-all", text.trim() ? "bg-gold text-[#1a1406] active:scale-90" : "text-muted")}><Send className="size-[18px]" /></button>
+          <div className="flex items-end gap-2">
+            {!editing && !ch.announce && <button aria-label="Emoji and stickers" onClick={() => setCompose(!compose)} className={clsx("grid size-11 shrink-0 place-items-center rounded-full bg-surface-3 transition-transform", compose ? "rotate-45 text-[var(--header)]" : "text-muted")}><Plus className="size-6" /></button>}
+            <div className={clsx("flex min-w-0 flex-1 items-center bg-surface-3 pl-4 pr-0.5", reply || editing ? "rounded-b-[22px]" : "rounded-[22px]")}>
+              <input ref={input} value={text} disabled={ch.announce} aria-label={`Message ${isDm ? title : `#${ch.name}`}`} onChange={(e) => onType(e.target.value)} onFocus={() => { stick.current = true; setCompose(false); if (text.trim() && !isDm && !editing) doTyping(srv.id, ch.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter") send(); if (e.key === "Escape") { setReply(undefined); setEditing(undefined); } if (e.key === "ArrowUp" && !text) { const mine = [...msgs].reverse().find((m) => m.authorId === "god" && !m.deleted); if (mine) startEdit(mine); } }}
+                enterKeyHint="send" autoComplete="off"
+                placeholder={ch.announce ? "Only mods can post in announcements" : isDm ? `Message @${peer!.handle}` : `Message #${ch.name}`} className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] text-fg outline-none placeholder:text-muted md:text-[15px]" />
+              {text.trim() || editing
+                ? <button aria-label={editing ? "Save edit" : "Send"} onClick={send} disabled={!text.trim()} className="pop grid size-11 shrink-0 place-items-center rounded-full bg-gold text-[#1a1406] active:scale-90"><Send className="size-[18px]" /></button>
+                : !ch.announce && <button aria-label="Emoji" onClick={() => setCompose(!compose)} className="grid size-11 shrink-0 place-items-center rounded-full text-muted"><Smile className="size-6" /></button>}
+            </div>
           </div>
         ) : <div className="rounded-[22px] bg-surface-3/60 px-4 py-2.5 text-center text-[14px] text-muted">You&apos;re reading someone else&apos;s DMs. They can&apos;t see you.</div>}
-        <div className="h-5 pt-0.5 text-[12px] text-muted" aria-live="polite">
-          {typing.length > 0 && (
-            <span className="flex items-center gap-1.5">
-              <span className="typing-dots"><i /><i /><i /></span>
-              <span className="truncate [&_b]:font-semibold [&_b]:text-[var(--header)]">{typingLabel(typing)}</span>
-            </span>
-          )}
-        </div>
+        {compose && withGod && (
+          <div className="pop mt-2 rounded-xl bg-surface p-2">
+            <div className="px-1 pb-1 text-[12px] font-bold uppercase text-muted">Emoji</div>
+            <div className="grid grid-cols-8 gap-0.5">
+              {PICKER.map((e) => <button key={e} aria-label={`Insert ${e}`} onClick={() => { onType(text + e); input.current?.focus({ preventScroll: true }); }} className="grid size-11 place-items-center rounded-lg text-[22px] active:bg-surface-2 md:hover:bg-surface-2">{e}</button>)}
+            </div>
+            <div className="px-1 pb-1 pt-2 text-[12px] font-bold uppercase text-muted">Stickers</div>
+            <div className="flex gap-1">
+              {STICKERS.map((st) => <button key={st} aria-label={`Send ${st}`} onClick={() => { setCompose(false); stick.current = true; setFromId(undefined); doSay(srv.id, ch.id, st, reply?.id); setReply(undefined); }} className="grid min-h-[52px] min-w-0 flex-1 place-items-center whitespace-nowrap rounded-lg bg-[var(--chat)] text-[17px] tracking-[-0.15em] active:scale-95">{st}</button>)}
+            </div>
+          </div>
+        )}
       </div>
 
       {sheetMsg && <ActionSheet s={s} srv={srv} m={sheetMsg} now={now} canWrite={withGod && !ch.announce} threadCount={threadCounts.get(sheetMsg.id) ?? 0}
@@ -617,22 +873,27 @@ function ActionSheet({ s, srv, m, now, canWrite, threadCount, onClose, onReact, 
 /* --------------------------------- rows -------------------------------- */
 
 interface RowProps {
-  s: WorldState; srv: Server; m: Message; text: string; edited: boolean; rx: Reaction[]; rxSig: string; parent?: Message; parentText?: string; grouped: boolean; dayLabel?: string; showNew: boolean;
+  s: WorldState; srv: Server; m: Message; text: string; edited: boolean; rx: Reaction[]; rxSig: string; parent?: Message; parentText?: string; grouped: boolean; dayLabel?: string; stamp: string; showNew: boolean;
   fresh: boolean; flash: boolean; selected: boolean; picker: boolean; threadCount: number; pinned: boolean; canWrite: boolean;
   onSelect: () => void; onLong: () => void; onReact: (e: string) => void; onPicker: () => void; onReply: () => void; onEdit: () => void; onDelete: () => void; onPin: () => void; onThread: () => void;
 }
-const same = (a: RowProps, b: RowProps) => a.m === b.m && a.text === b.text && a.edited === b.edited && a.rxSig === b.rxSig && a.parentText === b.parentText && a.grouped === b.grouped && a.dayLabel === b.dayLabel && a.showNew === b.showNew && a.fresh === b.fresh && a.flash === b.flash && a.selected === b.selected && a.picker === b.picker && a.threadCount === b.threadCount && a.pinned === b.pinned && a.m.deleted === b.m.deleted && a.m.authorId === b.m.authorId && a.m.meme === b.m.meme;
+const same = (a: RowProps, b: RowProps) => a.m === b.m && a.stamp === b.stamp && a.text === b.text && a.edited === b.edited && a.rxSig === b.rxSig && a.parentText === b.parentText && a.grouped === b.grouped && a.dayLabel === b.dayLabel && a.showNew === b.showNew && a.fresh === b.fresh && a.flash === b.flash && a.selected === b.selected && a.picker === b.picker && a.threadCount === b.threadCount && a.pinned === b.pinned && a.m.deleted === b.m.deleted && a.m.authorId === b.m.authorId && a.m.meme === b.m.meme;
 
-const Row = memo(function Row({ s, srv, m, text, edited, rx, parent, parentText, grouped, dayLabel, showNew, fresh, flash, selected, picker, threadCount, pinned, canWrite, onSelect, onLong, onReact, onPicker, onReply, onEdit, onDelete, onPin, onThread }: RowProps) {
+const Row = memo(function Row({ s, srv, m, text, edited, rx, parent, parentText, grouped, dayLabel, stamp, showNew, fresh, flash, selected, picker, threadCount, pinned, canWrite, onSelect, onLong, onReact, onPicker, onReply, onEdit, onDelete, onPin, onThread }: RowProps) {
   const a = who(s, m.authorId);
   const nick = a.char?.nicknames[srv.id];
   const mine = m.authorId === "god";
-  const pinged = !mine && (m.mentionsGod || /@god\b/i.test(text));
-  const isSystem = m.kind === "system";
+  const pinged = !mine && srv.id !== "dm" && (m.mentionsGod || /@god\b/i.test(text)); // a 1:1 DM isn't a "mention"
   const press = useLongPress(onLong);
   const open = (e: React.MouseEvent) => { e.stopPropagation(); if (a.kind === "char") go(`/u/${a.id}`); };
   const pa = parent ? who(s, parent.authorId) : undefined;
   if (m.deleted) return null;
+  if (m.intent === "pin") return (
+    <div data-mid={m.id} data-author={m.authorId} className={clsx("msg-row flex items-start gap-3 px-4 py-1.5", fresh && "msg-in")}>
+      <span className="grid w-10 shrink-0 place-items-center pt-0.5 text-muted"><Pin className="size-4" /></span>
+      <span className="min-w-0 flex-1 text-[15px] text-muted"><b className="font-semibold text-[var(--header)]">{nick ?? a.name}</b> pinned a message to this channel. <span className="text-[12px]">{stamp}</span></span>
+    </div>
+  );
   if (m.intent === "voiceJoin") return (
     <div data-mid={m.id} data-testid="voice-banner" className={clsx("vc-banner mx-3 my-2 rounded-lg px-3 py-2 text-center", fresh && "msg-in")}>
       <div className="flex items-center justify-center gap-2 text-[14px] font-semibold text-gold"><Mic className="size-4" />@god {text}</div>
@@ -641,8 +902,8 @@ const Row = memo(function Row({ s, srv, m, text, edited, rx, parent, parentText,
   );
   return (
     <>
-      {dayLabel && <div className="mx-4 my-3 flex items-center gap-2 text-[12px] font-semibold text-muted"><div className="h-px flex-1 bg-[var(--border)]" /><span>{dayLabel}</span><div className="h-px flex-1 bg-[var(--border)]" /></div>}
-      {showNew && <div className="mx-4 my-1 flex items-center gap-2 text-[11px] font-bold uppercase text-down"><div className="h-px flex-1 bg-down" /><span className="rounded bg-down px-1 text-white">New</span></div>}
+      {dayLabel && <div className="mx-4 my-4 flex items-center gap-2 text-[12px] font-semibold text-muted"><div className="h-px flex-1 bg-[var(--border)]" /><span>{dayLabel}</span><div className="h-px flex-1 bg-[var(--border)]" /></div>}
+      {showNew && <div className="relative mx-4 my-2 h-px bg-down"><span className="absolute -top-[8px] right-0 rounded-[4px] bg-down px-1 text-[10px] font-bold leading-4 text-white">NEW</span></div>}
       <div data-mid={m.id} data-author={m.authorId} data-reply-author={parent?.authorId}
         {...press}
         onClick={(e) => { e.stopPropagation(); if (press.consumed()) return; if (!isPhone()) onSelect(); }}
@@ -666,11 +927,11 @@ const Row = memo(function Row({ s, srv, m, text, edited, rx, parent, parentText,
             {!grouped && (
               <div className="flex items-baseline gap-2">
                 <button onClick={open} className="msg-name hit-lg min-w-0 truncate" style={{ color: a.char && srv.moderators.includes(a.id) ? MOD : mine ? "var(--gold)" : undefined }}><NameLine w={{ ...a, verified: mine }} nick={nick} /></button>
-                <span className="num shrink-0 text-[12px] text-muted">{clockTime(m.t)}</span>
+                <span className="shrink-0 text-[12px] font-medium text-muted">{stamp}</span>
                 {pinned && <Pin className="size-3 shrink-0 text-gold" aria-label="pinned" />}
               </div>
             )}
-            <div className={clsx("msg-text whitespace-pre-wrap break-words", isSystem && "italic !text-muted", m.kind === "bot" && "mt-0.5 rounded-md border-l-4 border-[var(--brand)] bg-surface px-3 py-1.5 not-italic")}>
+            <div className={clsx("msg-text whitespace-pre-wrap break-words", m.kind === "bot" && "mt-0.5 rounded-md border-l-4 border-[var(--brand)] bg-surface px-3 py-1.5 not-italic")}>
               <RichText text={text} onUser={(h) => { const c = s.characters.find((x) => x.username === h); if (c) go(`/u/${c.id}`); }} onTag={(t) => go(`/chirp/tag/${t}`)} />
               {edited && <span className="ml-1 text-[11px] text-muted">(edited)</span>}
             </div>
@@ -827,13 +1088,16 @@ function MemberList({ s, srv, chId, now, open, onClose }: { s: WorldState; srv: 
   const slot = Math.floor(now / 10_000);
   const groups = useMemo(() => {
     const seen = lastSeenMap(s, slot * 10_000, srv.id, 4000);
-    const g: Record<Presence, { id: string; t: number; core: boolean; mod: boolean }[]> = { online: [], idle: [], offline: [] };
+    const g: Record<Presence, { id: string; t: number; core: boolean; mod: boolean; p: Presence }[]> = { online: [], idle: [], offline: [] };
     for (const id of srv.members) {
       const c = s.characters[Number(id.slice(1))];
-      g[presenceOf(c, seen.get(id), slot * 10_000)].push({ id, t: seen.get(id) ?? 0, core: !!c.core, mod: srv.moderators.includes(id) });
+      const p = presenceOf(c, seen.get(id), slot * 10_000);
+      g[p].push({ id, t: seen.get(id) ?? 0, core: !!c.core, mod: srv.moderators.includes(id), p });
     }
-    const sort = (a: { t: number; core: boolean; mod: boolean }, b: { t: number; core: boolean; mod: boolean }) => Number(b.mod) - Number(a.mod) || Number(b.core) - Number(a.core) || b.t - a.t;
-    return { online: g.online.sort(sort), idle: g.idle.sort(sort), offline: g.offline.sort(sort) };
+    const sort = (a: { t: number; core: boolean; mod: boolean }, b: { t: number; core: boolean; mod: boolean }) => Number(b.core) - Number(a.core) || b.t - a.t;
+    // moderators are a hoisted role, shown above everyone else while they're around
+    const mods = [...g.online, ...g.idle].filter((m) => m.mod).sort(sort);
+    return { mods, online: g.online.filter((m) => !m.mod).sort(sort), idle: g.idle.filter((m) => !m.mod).sort(sort), offline: g.offline.sort(sort) };
   }, [s, srv, slot]);
   const typing = new Set(typingIn(s, chId, now));
   const CAP: Record<Presence, number> = { online: 80, idle: 40, offline: 30 };
@@ -846,11 +1110,11 @@ function MemberList({ s, srv, chId, now, open, onClose }: { s: WorldState; srv: 
         <div className="text-[14px] font-bold">Members <span className="num text-muted">{fmtCount(srv.memberCount)}</span></div>
         <button aria-label="Close members" className="grid size-11 place-items-center rounded-full bg-surface-3 md:hidden" onClick={onClose}><X className="size-4" /></button>
       </div>
-      {(["online", "idle", "offline"] as const).map((p) => groups[p].length > 0 && (
+      {(["mods", "online", "idle", "offline"] as const).map((p) => groups[p].length > 0 && (
         <div key={p}>
-          <div className="flex items-center gap-1.5 px-2 pb-1 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted"><span className={clsx("size-2 rounded-full", DOT[p])} />{p} — {groups[p].length}</div>
-          {groups[p].slice(0, CAP[p]).map((m) => <MemberItem key={m.id} x={who(s, m.id)} srv={srv} now={now} presence={p} typing={typing.has(m.id)} />)}
-          {groups[p].length > CAP[p] && <div className="px-2 py-1 text-[11px] text-muted">and {groups[p].length - CAP[p]} more</div>}
+          <div className="px-2 pb-1 pt-4 text-[12px] font-bold uppercase text-muted">{p === "mods" ? "Moderators" : p} — {groups[p].length}</div>
+          {groups[p].slice(0, p === "mods" ? 20 : CAP[p]).map((m) => <MemberItem key={m.id} x={who(s, m.id)} srv={srv} now={now} presence={m.p} typing={typing.has(m.id)} />)}
+          {p !== "mods" && groups[p].length > CAP[p] && <div className="px-2 py-1 text-[12px] text-muted">and {groups[p].length - CAP[p]} more</div>}
         </div>
       ))}
       <div className="mt-3 flex items-center gap-1.5 px-2 pb-4 text-[10px] text-muted"><AtSign className="size-3" />{srv.members.length} regulars · {fmtCount(srv.memberCount)} total</div>

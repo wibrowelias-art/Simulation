@@ -72,6 +72,8 @@
 
 html,
 body {
+  /* no browser swipe-to-go-back / pull effects: the Lounge uses horizontal swipes itself */
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--text);
   height: 100%;

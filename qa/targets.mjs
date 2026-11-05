@@ -44,14 +44,23 @@ await row.dispatchEvent("pointerup", { pointerType: "touch", button: 0, clientX:
 await wait(400);
 R.sheet = await audit();
 await page.keyboard.press("Escape"); await wait(300);
-await page.getByRole("button", { name: "Open channels" }).first().click(); await wait(500);
-R.drawer = await audit();
-await page.getByRole("button", { name: "Close" }).first().click(); await wait(400);
+// the composer's emoji/sticker tray
+await page.getByRole("button", { name: "Emoji and stickers" }).click(); await wait(400);
+R.tray = await audit();
+await page.getByRole("button", { name: "Emoji and stickers" }).click(); await wait(300);
+// members (swipe-left panel), then back to the server list (chat slides away, Lounge tabs appear)
 await page.getByRole("button", { name: "Members" }).first().click(); await wait(500);
 R.members = await audit();
 await page.getByRole("button", { name: "Close members" }).first().click(); await wait(400);
-await page.getByRole("button", { name: "More" }).click(); await wait(400);
-R.moreSheet = await audit();
+await page.getByRole("button", { name: "Open channels" }).first().click(); await wait(500);
+R.servers = await audit();
+await page.getByRole("button", { name: "GOD apps" }).click(); await wait(400);
+R.apps = await audit();
+await page.keyboard.press("Escape"); await wait(300);
+for (const [k, tab] of [["messages", /^Messages/], ["notifications", /^Notifications/], ["you", /^You/]]) {
+  await page.getByRole("navigation", { name: "Lounge tabs" }).getByRole("button", { name: tab }).click(); await wait(500);
+  R[k] = await audit();
+}
 await b.close();
 
 const total = Object.values(R).reduce((a, x) => a + x.length, 0);
