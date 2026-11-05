@@ -19,7 +19,7 @@ describe("flavor guard", () => {
     ]) expect(isFlavorSafe(bad), bad).toBe(false);
   });
   it("accepts story flavor", () => {
-    for (const ok of ["tick. tock. @god", ">_ the god files, part 2. enjoy. ::", "[ countdown: 9 min ]", "price for silence: $4M. clock's running.", "meet at 3:00", "░▒▓ we see you."])
+    for (const ok of ["tick. tock. @god", ">_ the god files, part 2. enjoy. ::", "[ countdown: 9 min ]", "price for silence: $4M. clock's running.", "meet at 3:00", "░▒▓ we see you.", "wrote Freya (@sweat.exe), a member of Respawn Lounge", "\"@quinn.exe\" said it first"])
       expect(flavorProblems(ok), ok).toEqual([]);
     expect(safeFlavor("rm -rf /", "::")).toBe("::");
   });
@@ -67,7 +67,8 @@ describe("gh0st storyline", () => {
     expect(crewOf(s, "gh0st")!.username).toBe("gh0st_");
   });
   it("a leak spreads across Lounge, Chirp, trends and the news, and asks god to choose", () => {
-    const topic = s.topics.find((t) => t.category === "leak")!;
+    // the crew's leak (other storylines can be "leaks" too, e.g. a leaked group chat)
+    const topic = s.topics.find((t) => t.category === "leak" && t.label.startsWith("the leaked "))!;
     expect(topic).toBeTruthy();
     expect(s.messages.some((m) => m.channelId === "undernet-leaks" && m.meme?.f === "leakdoc")).toBe(true);
     expect(s.posts.some((p) => p.platform === "chirp" && p.text.includes(`#${topic.tag}`))).toBe(true);

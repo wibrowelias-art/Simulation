@@ -5,7 +5,7 @@ import { badgesFor, OBSESSION_INFO, obsessionOf } from "@/lib/sim/social";
 import { dmChannel } from "@/lib/sim/godspeak";
 import { editWorld, useApp } from "../store";
 import { Avatar, NameLine, RichText, Section, StanceChip, go, who } from "../ui";
-import { PostCard } from "./Chirp";
+import { PostCard } from "./Feed";
 import { STANCE_INFO } from "@/lib/sim/characters";
 import { localHour, textAt } from "@/lib/sim/engine";
 import { fmtCount, relTime } from "@/lib/sim/format";
@@ -81,7 +81,7 @@ export function ProfileView({ id }: { id: string }) {
             <button key={m.id} onClick={() => go(`/lounge/${m.serverId}/${m.channelId}?m=${m.id}`)} className="block w-full text-left text-[14px]"><span className="text-[11px] text-muted">{m.serverId === "dm" ? "Direct message" : `${srv?.name} #${ch?.name}`} · {relTime(m.t, now)}</span><div>{textAt(m, now)}</div></button>
           ); })}{!msgs.length && <span className="text-[13px] text-muted">Lurker. Hasn&apos;t said anything recently.</span>}</div>
         </Section>
-        {posts.length > 0 && <div className="panel overflow-hidden">{posts.map((p) => <PostCard key={p.id} s={s} p={p} now={now} onOpen={() => go(`/chirp/post/${p.id}`)} />)}</div>}
+        {posts.length > 0 && <div className="panel overflow-hidden">{posts.map((p) => <PostCard key={p.id} s={s} p={p} now={now} onOpen={() => go(`/feed/post/${p.id}`)} />)}</div>}
       </div>
     </div>
   );

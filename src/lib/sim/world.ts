@@ -65,7 +65,7 @@ export function createWorld(seed: string, now: number): WorldState {
     celebrities: celebs.map((c) => ({ id: `c${c.idx}`, field: c.field })),
     messages: [], posts: [], articles: [], topics: [], events: [], notifications: [],
     player: {
-      username: "god", displayName: "God", cash: 2_400_000_000, followers: 48_200_000, reputation: 62, influence: 88, avatarSeed: 7,
+      username: "god", displayName: "God", cash: 2_400_000_000, followers: 184_300, reputation: 62, influence: 60, avatarSeed: 7,
       holdings: [
         { id: "h-holdings", kind: "business", name: "GOD Holdings", value: 9_800_000_000, acquiredAt: now - 9e10, detail: "Parent company · 14 subsidiaries", employees: 6200, yieldPerDay: 4_100_000 },
         { id: "h-penthouse", kind: "property", name: "Halcyon Tower Penthouse", value: 180_000_000, acquiredAt: now - 6e10, detail: "Port Aurelia · 3 floors" },

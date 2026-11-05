@@ -8,8 +8,8 @@ import { setupPlayer } from "@/lib/wallet/state";
 import { executeBuy, executeSell } from "@/lib/wallet/trade";
 import { sampleValue } from "@/lib/wallet/value";
 import { quoteOf } from "@/lib/market/client";
-import { tradeRipple } from "@/lib/wallet/world";
-import { dmChannel } from "@/lib/sim/godspeak";
+import { marketTopics, tradeRipple } from "@/lib/wallet/world";
+import type { TokenQuote } from "@/lib/market/providers";
 import { godAbandonTyping, godJoinVoice, godLeaveVoice, godTyping, voiceChannels } from "@/lib/sim/presence";
 import { liveReply, pickLead } from "@/lib/live/client";
 import { ambientTick, liveMoment, liveScene, type SceneHooks } from "@/lib/live/scene";
@@ -188,12 +188,8 @@ async function runCatchUpInner(w: WorldState, to: number, quiet = false) {
   // a tab that stayed open in the background just catches up in place, no "while you were away" card
   const summary = !quiet && gone > 10 * 60e3 ? summarize(w, base, to) : undefined;
   set(quiet ? { world: w, now: to } : { world: w, phase: "ready", now: to, summary, progress: 1 });
-  if (w.undernet?.announce) {
-    delete w.undernet.announce;
-    // the one-time tip for saves from before The Undernet: tap it to open gh0st's DMs
-    const g = w.undernet.crew.gh0st;
-    setTimeout(() => toast("New: The Undernet 🕸️ · DM gh0st_", 9000, g ? `/lounge/dm/${dmChannel("god", g)}` : "/lounge/undernet"), 1200);
-  }
+  // the gh0st storyline belongs to the old premise: it stays in saves but is paused and out of sight
+  if (w.undernet) { delete w.undernet.announce; w.undernet.nextLeakAt = Number.MAX_SAFE_INTEGER; }
   dirty = true;
   scheduleSave();
   startTick();
@@ -339,6 +335,8 @@ export function doTrade(side: "buy" | "sell", key: string, input: string): Trade
   });
 }
 export const doWallet = (fn: (w: WorldState, now: number) => void) => mutate((w, now) => fn(w, now));
+/** real market movers become things people talk about (called when a market board loads) */
+export const doMarketTopics = (rows: TokenQuote[]) => { const w = st.world; if (w && st.phase === "ready" && marketTopics(w, rows, Date.now())) { dirty = true; scheduleSave(); } };
 
 export const doEdit = (id: string, text: string) => {
   const old = st.world && findMsg(st.world, id)?.text;

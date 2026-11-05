@@ -160,7 +160,7 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
   const { srv, ch } = srvChan(s, serverId, channelId);
   if (!srv || !ch) return { message: god, replies: 0, reactions: 0, servers: [] };
   const rng = rngFor(s.seed, "speak", god.id);
-  const topic: Topic = { id: nid(s, "t"), tag: tagify(`God In ${srv.name}`), label: `god chatting in ${srv.name}`, about: "god", category: "chat", valence: 0.15, magnitude: 2.5, heat: 6, startedAt: now, subject: p.quote, facts: {} };
+  const topic: Topic = { id: nid(s, "t"), tag: tagify(`Live In ${srv.name}`), label: `god chatting in ${srv.name}`, about: "god", category: "chat", valence: 0.15, magnitude: 2.5, heat: 6, startedAt: now, subject: p.quote, facts: {} };
   s.topics.push(topic);
   god.topicId = topic.id;
   const x: Ctx = { s, rng, srv, ch, god, p, now, topic };

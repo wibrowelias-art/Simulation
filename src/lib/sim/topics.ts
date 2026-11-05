@@ -82,12 +82,23 @@ export function worldTopic(rng: Rng, id: string, t: number, celebName?: string, 
 
 /** Autonomous @god storylines (rumors, leaks, mentions...) so the world moves without the player. */
 const AUTO_GOD: { category: string; items: [subject: string, label: string][]; valence: number; mag: [number, number] }[] = [
-  { category: "rumor", items: [["god is buying a football club", "the football club rumor"], ["god has a secret second account", "the burner account rumor"], ["god is launching a phone", "the GOD phone rumor"], ["god is about to buy Breaking Wire Room", "the Wire Room buyout rumor"], ["god is moving to an island full time", "the island move rumor"], ["god turned down a $4B offer", "the $4B offer rumor"]], valence: 0.1, mag: [2, 5] },
-  { category: "allegation", items: [["god's net worth is half what people think", "the net worth claim"], ["god's jet is rented", "the rented jet claim"], ["god bought his followers", "the bought followers claim"], ["god ghost-writes his own fan accounts", "the fan account claim"]], valence: -0.6, mag: [3, 6] },
-  { category: "leak", items: [["god's pitch deck for a 'GOD phone'", "the pitch deck leak"], ["an old GOD HQ mod chat roasting fans", "the mod chat leak"], ["a menu from god's private chef", "the chef menu leak"], ["a photo of god's garage", "the garage photo leak"]], valence: -0.1, mag: [2, 5] },
-  { category: "viral", items: [["god's 6-word reply to a fan", "the 6-word reply"], ["god's 'stay humble' post from 2019", "the 'stay humble' post"], ["a clip of god tipping a waiter", "the tipping clip"], ["god rating fan art", "the fan art ratings"]], valence: 0.4, mag: [2, 4.5] },
-  { category: "mention", items: [["called god 'the main character of the internet'", "the 'main character' comment"], ["said god owes them a jet ride", "the jet ride callout"], ["challenged god to a charity boxing match", "the boxing challenge"], ["said they'd never collab with god", "the 'never collab' comment"]], valence: 0, mag: [2.5, 5] },
+  { category: "rumor", items: [["god is secretly a whale with a second wallet", "the second wallet rumor"], ["god is about to launch a paid trading group", "the paid group rumor"], ["god got early access to a launch", "the early access rumor"], ["god is quitting trading for a job", "the quitting rumor"], ["god knows the dev behind the next big coin", "the dev friend rumor"]], valence: 0.05, mag: [2, 5] },
+  { category: "allegation", items: [["god's P&L screenshots are edited", "the edited P&L claim"], ["god sells into followers after calling coins", "the selling-into-followers claim"], ["god is paid to promote coins", "the paid promo claim"], ["god runs alt accounts to hype their own calls", "the alt account claim"]], valence: -0.6, mag: [3, 6] },
+  { category: "leak", items: [["a group chat where god calls their followers exit liquidity", "the group chat leak"], ["god's watchlist", "the watchlist leak"], ["a DM from god to a coin dev", "the dev DM leak"]], valence: -0.1, mag: [2, 5] },
+  { category: "viral", items: [["god's 6-word reply to a hater", "the 6-word reply"], ["god calling a bottom to the minute", "the bottom call"], ["god's 'never sell' post from last year", "the 'never sell' post"], ["a clip of god explaining a trade on stream", "the stream clip"]], valence: 0.4, mag: [2, 4.5] },
+  { category: "mention", items: [["called god 'the best trader nobody's heard of'", "the 'best trader' comment"], ["said god copied their call", "the copied call callout"], ["challenged god to a trading contest", "the trading contest challenge"], ["said they'd never follow god's calls", "the 'never follow' comment"]], valence: 0, mag: [2.5, 5] },
 ];
+
+/** a real coin moving hard on the real market becomes something people talk about (live only: an overlay) */
+export function marketTopic(id: string, t: number, coin: { symbol: string; name: string; change: number; chain: string; address: string }): Topic {
+  const up = coin.change >= 0;
+  const pct = `${Math.round(Math.abs(coin.change))}%`;
+  return {
+    id, tag: coin.symbol.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 16) || "COIN", label: `$${coin.symbol} ${up ? "up" : "down"} ${pct} today`, about: "world", category: "crypto",
+    valence: 0, magnitude: Math.min(7, 2.5 + Math.abs(coin.change) / 60), heat: Math.min(16, 5 + Math.abs(coin.change) / 15), startedAt: t, subject: `$${coin.symbol}`,
+    facts: { coin: coin.symbol, ticker: coin.symbol, chain: coin.chain, address: coin.address, real: "1" },
+  };
+}
 
 export function autoGodTopic(rng: Rng, id: string, t: number, celebName: string, celebId: string): Topic {
   const def = rng.pick(AUTO_GOD);
@@ -95,7 +106,7 @@ export function autoGodTopic(rng: Rng, id: string, t: number, celebName: string,
   const subj = def.category === "mention" ? `${celebName} ${subj0}` : subj0;
   const label = def.category === "mention" ? `${celebName}'s ${short.replace(/^the /, "")}` : short;
   return {
-    id, tag: def.category === "mention" ? tagify(`${celebName} God`) : tagify(`God ${short.replace(/^the /, "").replace(/ (rumor|claim|leak)$/, "")}`), label, about: "god", category: def.category,
+    id, tag: def.category === "mention" ? tagify(`${celebName} Callout`) : tagify(`${short.replace(/^the /, "").replace(/ (rumor|claim|leak)$/, "")}`), label, about: "god", category: def.category,
     valence: def.valence, magnitude: rng.range(...def.mag), heat: rng.range(6, 18), startedAt: t, subject: subj, celebrityId: def.category === "mention" ? celebId : undefined, facts: { celeb: celebName },
   };
 }

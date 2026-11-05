@@ -805,7 +805,7 @@ export function applyAction(s: WorldState, input: ActionInput, now: number): Rip
   const mag = magnitudeFor(input.kind, cost, input.boost ?? 0);
   const subject = input.kind === "coin" ? name.replace(/^\$/, "").toUpperCase() : name;
   const topic: Topic = {
-    id: nid(s, "t"), tag: input.kind === "coin" ? subject : tagify(`God ${def.kind === "announcement" || def.kind === "controversy" ? def.kind : subject}`), label: def.label(subject), about: "god", category: input.kind,
+    id: nid(s, "t"), tag: input.kind === "coin" ? subject : tagify(`${def.kind === "announcement" || def.kind === "controversy" ? def.kind : subject}`), label: def.label(subject), about: "god", category: input.kind,
     valence: def.valence + (rng.next() - 0.5) * 0.2, magnitude: mag, heat: mag * 7, startedAt: now, subject, amount: cost || undefined, facts: { action: input.kind, coin: input.kind === "coin" ? subject : "GOD", ticker: subject },
   };
   s.topics.push(topic);
@@ -837,7 +837,7 @@ export function resolveEvent(s: WorldState, eventId: string, choiceId: string, n
   if (eff.cash) notify(s, now, "money", `${fmtMoney(eff.cash, { sign: true })} · ${ev.title}`);
   let rip: RippleResult | undefined;
   if (eff.topic) {
-    const tp: Topic = { id: nid(s, "t"), tag: tagify(`God ${eff.topic.label}`), label: eff.topic.label, about: "god", category: eff.topic.category, valence: eff.topic.valence, magnitude: eff.topic.magnitude, heat: eff.topic.magnitude * 6, startedAt: now, subject: eff.topic.subject, amount: eff.topic.amount, facts: {} };
+    const tp: Topic = { id: nid(s, "t"), tag: tagify(eff.topic.label), label: eff.topic.label, about: "god", category: eff.topic.category, valence: eff.topic.valence, magnitude: eff.topic.magnitude, heat: eff.topic.magnitude * 6, startedAt: now, subject: eff.topic.subject, amount: eff.topic.amount, facts: {} };
     s.topics.push(tp);
     rip = ripple(s, tp, now, rng);
   }
@@ -893,7 +893,7 @@ export function godPostAction(s: WorldState, postId: string, kind: "like" | "rep
 export function godPost(s: WorldState, platform: PlatformId, text: string, now: number, quoteOf?: string, replyTo?: string): RippleResult {
   simulate(s, now);
   const rng = rngFor(s.seed, "post", s.counter);
-  const topic: Topic = { id: nid(s, "t"), tag: tagify(`God ${text.split(" ").slice(0, 3).join(" ")}`) || "GodPost", label: `god's post`, about: "god", category: "announcement", valence: 0.15, magnitude: clamp(3.5 + text.length / 120 + rng.range(0, 2), 1, 8), heat: 20, startedAt: now, subject: text.slice(0, 80), facts: {} };
+  const topic: Topic = { id: nid(s, "t"), tag: tagify(text.split(" ").slice(0, 3).join(" ")) || "NewPost", label: `god's post`, about: "god", category: "announcement", valence: 0.15, magnitude: clamp(3.5 + text.length / 120 + rng.range(0, 2), 1, 8), heat: 20, startedAt: now, subject: text.slice(0, 80), facts: {} };
   s.topics.push(topic);
   const e = engagementFor(rng, undefined, topic.heat, true, s.player.followers);
   const post: Post = { id: nid(s, "p"), platform, authorId: "god", text, t: now, topicId: topic.id, quoteOf, replyTo, ...e, score: 20 };
@@ -994,7 +994,7 @@ export function bootstrap(s: WorldState, now: number, hours = 3, opts: { defer?:
   s.simTime = start;
   for (let i = 0; i < 4; i++) { const c = celebPick(s, rng); s.topics.push(worldTopic(rng, nid(s, "t"), start, c.displayName, c.id)); }
   for (let i = 0; i < 2; i++) { const c = celebPick(s, rng); s.topics.push(autoGodTopic(rng, nid(s, "t"), start, c.displayName, c.id)); }
-  s.topics.push({ id: nid(s, "t"), tag: "GodCreativeMode", label: "the 'creative mode' post", about: "god", category: "viral", valence: 0.4, magnitude: 5, heat: 14, startedAt: start, subject: "life is easier on creative mode", facts: {} });
+  s.topics.push({ id: nid(s, "t"), tag: "CreativeMode", label: "the 'creative mode' post", about: "god", category: "viral", valence: 0.4, magnitude: 5, heat: 14, startedAt: start, subject: "life is easier on creative mode", facts: {} });
   spawnEvent(s, rng, start + HOUR);
   if (!opts.defer) simulate(s, now, { full: true });
   s.lastSeenAt = now;

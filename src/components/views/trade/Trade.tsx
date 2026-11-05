@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Compass, PieChart, Search as SearchIcon, Share2, X } from "lucide-react";
 import type { Route } from "../../App";
 import { haptic } from "../../App";
-import { toast, useApp } from "../../store";
+import { doMarketTopics, toast, useApp } from "../../store";
 import { go } from "../../ui";
 import { boardOf, errorOf, loadBoard, searchTokens, useMarket, watchTokens, type Board } from "@/lib/market/client";
 import { CHAIN_LABEL, tokenKey, type TokenQuote } from "@/lib/market/providers";
@@ -68,7 +68,7 @@ function Discover({ now }: { now: number }) {
   useEffect(() => {
     const ctl = new AbortController();
     const b = boardOf(src);
-    if (!b || now - b.fetchedAt > 60_000) void loadBoard(src, ctl.signal);
+    if (!b || now - b.fetchedAt > 60_000) void loadBoard(src, ctl.signal).then(() => { const r = boardOf(src); if (r && !r.stale) doMarketTopics(r.data); });
     const t = setInterval(() => void loadBoard(src), 60_000);
     return () => { ctl.abort(); clearInterval(t); };
   }, [src]); // eslint-disable-line react-hooks/exhaustive-deps

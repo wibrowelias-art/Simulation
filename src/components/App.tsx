@@ -16,7 +16,7 @@ import { AwaySummary, Toast } from "./views/Overlays";
 const Loading = () => <div className="grid h-full place-items-center bg-bg"><span className="skeleton h-24 w-56 rounded-2xl" /></div>;
 const Trade = dynamic(() => import("./views/trade/Trade").then((m) => m.Trade), { loading: Loading });
 const Wallet = dynamic(() => import("./views/wallet/Wallet").then((m) => m.Wallet), { loading: Loading });
-const Feed = dynamic(() => import("./views/Chirp").then((m) => m.Chirp), { loading: Loading });
+const Feed = dynamic(() => import("./views/Feed").then((m) => m.Murmur), { loading: Loading });
 const News = dynamic(() => import("./views/News").then((m) => m.News), { loading: Loading });
 const SearchView = dynamic(() => import("./views/Search").then((m) => m.SearchView), { loading: Loading });
 const ProfileView = dynamic(() => import("./views/Profile").then((m) => m.ProfileView), { loading: Loading });
@@ -57,10 +57,13 @@ export function App() {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const fit = () => { document.documentElement.style.setProperty("--app-h", `${Math.round(vv.height)}px`); if (vv.offsetTop) window.scrollTo(0, 0); };
+    const fit = () => { document.documentElement.style.setProperty("--app-h", `${Math.round(vv.height)}px`); if (vv.offsetTop || window.scrollY) window.scrollTo(0, 0); };
+    // the app is a fixed-height shell: if focusing an input nudged the page, put it back once the input lets go
+    const settle = () => setTimeout(() => { if (window.scrollY) window.scrollTo(0, 0); }, 50);
     fit();
     vv.addEventListener("resize", fit);
-    return () => vv.removeEventListener("resize", fit);
+    document.addEventListener("focusout", settle);
+    return () => { vv.removeEventListener("resize", fit); document.removeEventListener("focusout", settle); };
   }, []);
 
   if (app.phase === "boot") return <Splash />;

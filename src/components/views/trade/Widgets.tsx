@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { ChevronRight } from "lucide-react";
 import { AppMark } from "../../brand";
+import { doMarketTopics } from "../../store";
 import { boardOf, loadBoard, useMarket } from "@/lib/market/client";
 import { tokenKey } from "@/lib/market/providers";
 import { fmtPrice } from "@/lib/wallet/format";
@@ -11,7 +12,10 @@ import { Change, TokenIcon } from "./parts";
 /** Home screen widget: the top of Kiteline's trending board */
 export function MarketWidget({ onOpen }: { onOpen: (href: string) => void }) {
   useMarket();
-  useEffect(() => { const b = boardOf("trending"); if (!b || Date.now() - b.fetchedAt > 60_000) void loadBoard("trending"); }, []);
+  useEffect(() => {
+    const b = boardOf("trending");
+    if (!b || Date.now() - b.fetchedAt > 60_000) void loadBoard("trending").then(() => { const r = boardOf("trending"); if (r && !r.stale) doMarketTopics(r.data); });
+  }, []);
   const rows = boardOf("trending")?.data.slice(0, 3);
   return (
     <div className="mt-3 rounded-2xl bg-surface p-2">

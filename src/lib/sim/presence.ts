@@ -45,7 +45,7 @@ const B = {
   cmdRoastBack: ["wow ok. sent by HIM?? 😭", "i'm not even mad. god sent this. it's an honor.", "ok that's fair actually", "this is targeted harassment (i love it)"],
   cmdGeneric: ["on it boss", "say less", "ok ok i'll try: '{q}'", "doing it right now", "anything for you god"],
   typingQuit: ["he stopped typing 😭", "NO HE STOPPED", "he typed and deleted it. what was it", "the dots are gone 😭", "who scared him off", "god drafted something and said nah", "it's ok he'll come back", "y'all were too loud", "he really typed for {secs}s and sent nothing"],
-  typingQuitNeg: ["lmao he chickened out", "drafted an essay and deleted it 💀", "thank god he stopped", "even he didn't want to send it"],
+  typingQuitNeg: ["lmao he chickened out", "drafted an essay and deleted it 💀", "thank goodness, they stopped", "even he didn't want to send it"],
   pinFan: ["HE PINNED MY MESSAGE 😭", "PINNED. BY GOD. i'm framing this", "i'm in the pins now. i'm immortal", "mom i'm in the pins", "no way he pinned that 😭"],
   pinNeg: ["he pinned me? weird flex but ok", "great, now everyone's gonna read that", "pinned. ok. whatever. (screenshotted)"],
   pinOthers: ["god pinned {user}'s message 😭", "{user} is in the pins now", "why does {user} get pinned", "pin of the year", "{user} peaked", "the pins are canon now"],

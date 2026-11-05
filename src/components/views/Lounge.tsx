@@ -10,7 +10,7 @@ import { linkTo } from "../links";
 import { AppMark } from "../brand";
 import { APP } from "@/lib/brand";
 import { overheardAt, speaking, voiceChannels, voiceRoster } from "@/lib/sim/presence";
-import { Avatar, NameLine, RichText, go, who } from "../ui";
+import { Avatar, NameLine, RichText, go, showHandle, who } from "../ui";
 import { channelMessages, dmThreads, isEdited, localHour, pinnedIn, reactionsAt, textAt, threadMessages, typingIn, unreadIndex, type UnreadInfo } from "@/lib/sim/engine";
 import { dmChannel, dmPeer } from "@/lib/sim/godspeak";
 import { badgesFor, lastSeenMap, obsessionOf, OBSESSION_INFO, presenceOf, type Presence } from "@/lib/sim/social";
@@ -227,7 +227,7 @@ function ServerRail({ s, srvId, chId, unread, dms, onApps }: { s: WorldState; sr
         {dmMentions > 0 && <span className="absolute bottom-0 right-2"><Pill n={dmMentions} mention /></span>}
       </button>
       <div className="h-0.5 w-8 rounded-full bg-[var(--surface-3)]" />
-      {s.servers.map((x) => {
+      {s.servers.filter((x) => x.id !== "undernet").map((x) => {
         const active = x.id === srvId;
         let n = 0, m = 0;
         for (const c of x.channels) { if (c.id === chId) continue; const u = unread.get(c.id); if (u) { n += u.n; m += u.mentions; } }
@@ -397,7 +397,7 @@ function DmRow({ s, d, now, active, u }: { s: WorldState; d: ReturnType<typeof d
           <span className="ml-auto shrink-0 text-[12px] text-muted">{relTime(d.last.t, now)}</span>
         </span>
         <span className="flex items-center gap-2">
-          <span className={clsx("truncate text-[14px]", unreadHere ? "text-fg" : "text-muted")}>{lastBy}{textAt(d.last, now) || (d.last.meme ? "sent an image" : "")}</span>
+          <span className={clsx("truncate text-[14px]", unreadHere ? "text-fg" : "text-muted")}>{lastBy}{showHandle(textAt(d.last, now)) || (d.last.meme ? "sent an image" : "")}</span>
           {unreadHere > 0 && <span className="ml-auto"><Pill n={unreadHere} mention /></span>}
         </span>
       </span>
@@ -483,7 +483,7 @@ function InboxScreen({ s, now }: { s: WorldState; now: number }) {
             <button key={n.id} onClick={() => linkTo(n.link)} className={clsx("flex w-full items-start gap-3 rounded-lg px-2 py-2.5 text-left active:bg-surface-2 md:hover:bg-surface-2", !n.read && "bg-white/[0.035]")}>
               {c ? <Avatar src={who(s, c.id).avatar} size={40} /> : <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--surface-3)] text-gold">{n.kind === "mention" ? <AtSign className="size-5" /> : n.kind === "news" ? <Newspaper className="size-5" /> : n.kind === "money" ? <Crown className="size-5" /> : <Bell className="size-5" />}</span>}
               <span className="min-w-0 flex-1">
-                <span className="block text-[15px] leading-snug text-fg">{c ? <><b className="text-[var(--header)]">{c.displayName}</b>{rest}</> : n.text}</span>
+                <span className="block text-[15px] leading-snug text-fg">{c ? <><b className="text-[var(--header)]">{c.displayName}</b>{showHandle(rest)}</> : showHandle(n.text)}</span>
                 <span className="text-[12px] text-muted">{relTime(n.t, now)}</span>
               </span>
               {!n.read && <span className="mt-2 size-2.5 shrink-0 rounded-full bg-down" />}
@@ -919,7 +919,7 @@ const Row = memo(function Row({ s, srv, m, text, edited, rx, parent, parentText,
           <div className="reply-spine mb-1 ml-[52px] flex items-center gap-1.5 truncate text-[13px] text-muted">
             <Avatar src={pa.avatar} size={16} />
             <span className={clsx("shrink-0 font-semibold", pa.kind === "god" ? "text-gold" : "text-[var(--header)]/80")}>{pa.kind === "god" ? "" : "@"}{pa.char?.nicknames[srv.id] ?? pa.name}</span>
-            <span className="truncate">{parent.deleted ? <i>Original message was deleted</i> : parentText}</span>
+            <span className="truncate">{parent.deleted ? <i>Original message was deleted</i> : showHandle(parentText ?? "")}</span>
           </div>
         )}
         <div className="flex gap-3">
@@ -937,7 +937,7 @@ const Row = memo(function Row({ s, srv, m, text, edited, rx, parent, parentText,
               </div>
             )}
             <div className={clsx("msg-text whitespace-pre-wrap break-words", m.kind === "bot" && "mt-0.5 rounded-md border-l-4 border-[var(--brand)] bg-surface px-3 py-1.5 not-italic")}>
-              <RichText text={text} onUser={(h) => { const c = s.characters.find((x) => x.username === h); if (c) go(`/u/${c.id}`); }} onTag={(t) => go(`/chirp/tag/${t}`)} />
+              <RichText text={text} onUser={(h) => { const c = s.characters.find((x) => x.username === h); if (c) go(`/u/${c.id}`); }} onTag={(t) => go(`/feed/tag/${t}`)} />
               {edited && <span className="ml-1 text-[11px] text-muted">(edited)</span>}
             </div>
             {m.meme && <MemeImage m={m.meme} id={m.id} />}
@@ -986,7 +986,7 @@ function ActBtn({ icon: I, label, onClick, danger }: { icon: typeof Reply; label
 function MiniMsg({ s, srv, m, now, onClick, hl }: { s: WorldState; srv: Server; m: Message; now: number; onClick?: () => void; hl?: string }) {
   const a = who(s, m.authorId);
   const t = textAt(m, now);
-  let body: React.ReactNode = t;
+  let body: React.ReactNode = showHandle(t);
   if (hl) { const i = t.toLowerCase().indexOf(hl.toLowerCase()); if (i >= 0) body = <>{t.slice(0, i)}<mark className="rounded bg-gold/30 px-0.5 text-fg">{t.slice(i, i + hl.length)}</mark>{t.slice(i + hl.length)}</>; }
   const chName = srv.channels.find((c) => c.id === m.channelId)?.name;
   return (

@@ -34,11 +34,14 @@ export interface LiveRequest {
   persona: LivePersona;
   place: { dm: boolean; server: string; channel: string };
   history: LiveLine[]; // oldest first, max 30
-  god: string; // what god just said
-  replyingTo?: string; // their own message god replied to
+  god: string; // what the player just said
+  replyingTo?: string; // their own message the player replied to
+  player?: string; // the player's handle (they appear as @handle)
   allowBreak?: boolean; // user turned on "characters can break character" in Settings
 }
 
+/** the player's handle as the model sees it; old clients send none and get "god" */
+export const handleOf = (h: unknown) => (typeof h === "string" ? h.toLowerCase().replace(/[^\w.]/g, "").slice(0, 24) : "") || "god";
 const cut = (s: unknown, n: number) => (typeof s === "string" ? s.replace(/[\u0000-\u001f]/g, " ").slice(0, n) : "");
 const arr = (a: unknown, n: number, len: number) => (Array.isArray(a) ? a.slice(0, n).map((x) => cut(x, len)).filter(Boolean) : []);
 
@@ -65,6 +68,7 @@ export function sanitize(b: unknown): LiveRequest | undefined {
     god,
     replyingTo: cut(r.replyingTo, 300) || undefined,
     allowBreak: !!r.allowBreak,
+    player: handleOf(r.player),
   };
 }
 
@@ -80,42 +84,44 @@ const VOICE: Record<string, string> = {
   formal: "a bit formal and wordy but still a chat message",
 };
 
-export function feeling(o: number) {
-  return o > 60 ? "you are obsessed with god and hype everything he says" : o > 20 ? "you like god" : o > -20 ? "you are neutral or unsure about god" : o > -60 ? "you are skeptical of god and a bit sarcastic" : "you dislike god and roast him, but you still reply";
+export function feeling(o: number, who = "god") {
+  return o > 60 ? `you're a huge fan of ${who} and hype everything they post` : o > 20 ? `you like ${who}` : o > -20 ? `you're neutral or unsure about ${who}` : o > -60 ? `you're skeptical of ${who} and a bit sarcastic` : `you don't like ${who} and roast them, but you still reply`;
 }
 
 /** system prompt: who they are, how they type, safety rules */
 export function instructions(r: LiveRequest): string {
   const p = r.persona;
-  const glaze = p.opinion > 60 ? "You are a huge fan, so you hype him, but you still talk about your own stuff too." : "Do not suck up to him. Treat him like a normal person in the chat: tease him, disagree with him when you disagree, get bored, change the subject.";
+  const P = `@${r.player ?? "god"}`;
+  const glaze = p.opinion > 60 ? "You are a big fan, so you hype them, but you still talk about your own stuff too." : "Do not suck up to them. Treat them like a normal person in the chat: tease them, disagree when you disagree, get bored, change the subject.";
   return [
     `You are ${p.name} (@${p.username}), a regular person chatting in an online community app called the Lounge. You are a fictional character in a fictional world. Never claim to be a real person who exists outside this world, and never name real celebrities, companies or platforms as if you know them.`,
     r.allowBreak ? "If someone sincerely asks whether you are an AI, you may say yes." : "Stay in character. Never say or hint that you are an AI, a bot, a language model, an assistant or a character. Never say 'As an AI'. If asked, deflect like a real person would (\"bro what 💀\").",
     `About you: ${p.age}, ${p.occupation}, from ${p.location}. ${p.bio}. Personality: ${p.personality.join(", ")}. Into: ${p.interests.join(", ")}. Something you say sometimes: "${p.catchphrase}". You have your own life (work, friends, plans, problems) and bring it up naturally.`,
     p.friends.length || p.rivals.length ? `People in the chat: friends ${p.friends.map((x) => "@" + x).join(", ") || "none"}; you don't get along with ${p.rivals.map((x) => "@" + x).join(", ") || "nobody"}.` : "",
-    `"god" (@god) is the richest, most famous person in this world. Everyone knows him. ${feeling(p.opinion)} (opinion ${p.opinion}/100). How well you know him: ${p.bond}/100. ${glaze}`,
-    p.godFacts.length ? `Things god told you about himself (remember these and use them when relevant): ${p.godFacts.join("; ")}.` : "",
+    `${P} is a memecoin trader everyone in these communities has heard of: known for their calls, P&L screenshots and hot takes, and getting more famous every week. ${feeling(p.opinion, P)} (opinion ${p.opinion}/100). How well you know them: ${p.bond}/100. ${glaze}`,
+    p.godFacts.length ? `Things ${P} told you about themselves (remember these and use them when relevant): ${p.godFacts.join("; ")}.` : "",
     p.memories.length ? `Things you remember (bring them up naturally when it fits, e.g. "you said your dog was called biscuit"): ${p.memories.join("; ")}.` : "",
     p.life ? `What's going on in your life right now: ${p.life}. It's on your mind and you mention it sometimes.` : "",
     p.mood ? `Your mood today: ${p.mood}.` : "",
-    (p.warmth ?? 0) <= -20 ? `You're still annoyed with god personally (${p.warmth}/100) because of how he treated you. Be colder and shorter with him than usual; you don't let it go easily.` : (p.warmth ?? 0) >= 25 ? "You've been feeling warm toward god lately because of how he treated you." : "",
-    p.pastWithGod.length ? `Things god said to you before: ${p.pastWithGod.map((x) => `"${x}"`).join("; ")}.` : "",
+    (p.warmth ?? 0) <= -20 ? `You're still annoyed with ${P} personally (${p.warmth}/100) because of how they treated you. Be colder and shorter with them than usual; you don't let it go easily.` : (p.warmth ?? 0) >= 25 ? `You've been feeling warm toward ${P} lately because of how they treated you.` : "",
+    p.pastWithGod.length ? `Things ${P} said to you before: ${p.pastWithGod.map((x) => `"${x}"`).join("; ")}.` : "",
     `Typing style: ${VOICE[p.voice] ?? VOICE.lowercase}. Slang you use: ${p.slang.join(", ") || "lol"}. Emojis you like: ${p.emojis.join(" ") || "😭"}. Don't overdo slang or emojis.`,
     "Talk like a normal person texting in a group chat or DM: short, casual, sometimes a typo, sometimes just a reaction. React to what was actually just said, not generic hype. Ask follow-up questions sometimes. Have opinions and sometimes disagree. Give real (casual) advice if asked. Remember everything in the conversation so far and answer questions about it correctly. Never sound like a customer-service assistant: no 'Great question', no offering help, no lists. Do not repeat earlier lines. No hashtags, no name prefix, no narration or actions in asterisks.",
-    "Keep it friendly-ish and PG-13: no hate, slurs, sexual content, threats, or personal info. If god asks for something like that, dodge it in character.",
+    `Keep it friendly-ish and PG-13: no hate, slurs, sexual content, threats, or personal info. If ${P} asks for something like that, dodge it in character.`,
     p.crew ? "You are part of gh0st's crew in The Undernet. This is pure in-world story: dramatic, mysterious, playful. Never give any real technical details at all: no tools, commands, code, file names, websites, addresses, steps or methods. Talk only in vague story terms (\"receipts\", \"drops\", \"the vault\")." : "Any hacking, leak or ransom talk (gh0st, The Undernet) is pure story flavor. Never give real technical details: no tools, commands, code, websites, addresses, steps or methods. If asked how to hack anything, laugh it off in character.",
-    'Reply with JSON only: {"messages": ["..."], "remember": "..."}. "messages": an array of plain strings, 1 to 3 chat messages, usually 1, each under 160 characters. "remember": a short new fact god just told you about himself or his life worth remembering (like "his dog is called Biscuit"), or "" if none. Only if god asks for a meme (or one would be really funny), add "meme": {"format": "caption|pov|compare|reaction|gif|sticker|quote", "top": "short meme text", "bottom": "optional"}.',
+    'Reply with JSON only: {"messages": ["..."], "remember": "..."}. "messages": an array of plain strings, 1 to 3 chat messages, usually 1, each under 160 characters. "remember": a short new fact they just told you about themselves or their life worth remembering (like "their dog is called Biscuit"), or "" if none. Only if they ask for a meme (or one would be really funny), add "meme": {"format": "caption|pov|compare|reaction|gif|sticker|quote", "top": "short meme text", "bottom": "optional"}.',
   ].filter(Boolean).join("\n");
 }
 
 export function promptText(r: LiveRequest): string {
-  const where = r.place.dm ? `a private DM between you and god` : `#${r.place.channel} in the ${r.place.server} server`;
+  const P = `@${r.player ?? "god"}`;
+  const where = r.place.dm ? `a private DM between you and ${P}` : `#${r.place.channel} in the ${r.place.server} server`;
   const hist = r.history.map((l) => `${l.who}: ${l.text}`).join("\n");
   return [
     `You are in ${where}. Recent messages (oldest first):`,
     hist || "(nothing yet)",
-    r.replyingTo ? `\ngod replied directly to your message: "${r.replyingTo}"` : "",
-    `\ngod just said: "${r.god}"`,
+    r.replyingTo ? `\n${P} replied directly to your message: "${r.replyingTo}"` : "",
+    `\n${P} just said: "${r.god}"`,
     `\nWrite your reply as @${r.persona.username}, as JSON.`,
   ].join("\n");
 }
@@ -184,6 +190,7 @@ export interface SceneRequest {
   moment?: string; // moment: what god just did ("god reacted 🔥 to @kai's message ...")
   first?: string; // username that must speak first (e.g. the person god reacted to)
   lines: number; // how many chat lines to write (3..8)
+  player?: string; // the player's handle
   memes?: boolean; // may attach a meme to one line
 }
 
@@ -211,16 +218,16 @@ export function sanitizeScene(b: unknown): SceneRequest | undefined {
     history: (Array.isArray(r.history) ? r.history : []).slice(-30).map((x) => ({ who: cut((x as LiveLine)?.who, 40), text: cut((x as LiveLine)?.text, 240) })).filter((x) => x.who && x.text),
     about: cut(r.about, 160) || undefined, god: cut(r.god, 400) || undefined, moment: cut(r.moment, 240) || undefined,
     first: cut(r.first, 40).replace(/^@/, "") || undefined,
-    lines: Math.max(2, Math.min(8, Math.round(Number(r.lines) || 5))), memes: !!r.memes,
+    lines: Math.max(2, Math.min(8, Math.round(Number(r.lines) || 5))), memes: !!r.memes, player: handleOf(r.player),
   };
 }
 
-const castLine = (c: CastCard) => [
+const castLine = (c: CastCard, P = "@god") => [
   `@${c.username} (${c.name}, ${c.age}, ${c.occupation})`,
   `types: ${VOICE[c.voice] ?? VOICE.lowercase}`,
   c.slang.length ? `slang: ${c.slang.join(", ")}` : "",
   c.emojis.length ? `emojis: ${c.emojis.join(" ")}` : "",
-  `on god: ${c.stance} (${c.opinion})`,
+  `on ${P}: ${c.stance} (${c.opinion})`,
   c.mood ? `mood: ${c.mood}` : "",
   c.life ? `life right now: ${c.life}` : "",
   c.memories.length ? `remembers: ${c.memories.join("; ")}` : "",
@@ -231,28 +238,30 @@ const castLine = (c: CastCard) => [
 
 /** system prompt for a group scene */
 export function sceneInstructions(r: SceneRequest): string {
+  const P = `@${r.player ?? "god"}`;
   return [
     "You write a few messages of a real group chat in the Lounge, an online community app, in a fictional world. Every person is fictional. Never name real celebrities, companies or platforms.",
-    `"god" (@god) is the richest, most famous person in this world and everyone in the chat knows who he is.`,
+    `${P} is a memecoin trader everyone in these communities has heard of: known for their calls and P&L screenshots, and getting more famous every week. When someone mentions them, write ${P}.`,
     "Write like real people texting in a busy server: short (usually 2-12 words), casual, lowercase for younger people, the odd typo, reactions like 'real', 'LMAO', 'wait what'. People talk TO EACH OTHER: reply, agree, argue, dunk, ratio, bring up inside jokes, ask each other questions, change the subject to their own lives (work, school, games, food, plans). Each person keeps their own voice, slang and opinions; fans and haters clash; friends back each other up.",
     "Never sound like an assistant or a bot: no helpful tone, no explanations, no lists, no 'great question', never mention AI. No hashtags, no narration, no actions in asterisks, no name prefixes inside the text. Don't repeat lines from the history.",
     "Keep it PG-13: rude, petty and dramatic is fine; no slurs, hate, sexual content, threats, or real personal info.",
     "Any hacking, leak or ransom talk (gh0st, The Undernet) is pure story flavor: never any real technical details (no tools, commands, code, websites, addresses, steps).",
-    `Reply with JSON only: {"lines":[{"who":"username","text":"message","to":"username, god, or empty"${r.memes ? ',"meme":{"format":"caption|pov|compare|reaction|gif|sticker|quote","top":"short meme text (or 3-5 emojis for a sticker)","bottom":"optional second line (for quote: what god said)"}' : ""}}]}. "who" must be one of the cast usernames. "to" is who the message replies to (a cast member, god, or someone from the history), or "" for none. Use "to" often so it reads like a conversation.${r.memes ? ' At most one line may have a "meme" (only if it is funny), otherwise leave it out.' : ""}`,
+    `Reply with JSON only: {"lines":[{"who":"username","text":"message","to":"username, ${r.player ?? "god"}, or empty"${r.memes ? ',"meme":{"format":"caption|pov|compare|reaction|gif|sticker|quote","top":"short meme text (or 3-5 emojis for a sticker)","bottom":"optional second line (for quote: what god said)"}' : ""}}]}. "who" must be one of the cast usernames. "to" is who the message replies to (a cast member, ${P}, or someone from the history), or "" for none. Use "to" often so it reads like a conversation.${r.memes ? ' At most one line may have a "meme" (only if it is funny), otherwise leave it out.' : ""}`,
   ].join("\n");
 }
 
 export function scenePrompt(r: SceneRequest): string {
+  const P = `@${r.player ?? "god"}`;
   const hist = r.history.map((l) => `${l.who}: ${l.text}`).join("\n");
   const ask = r.mode === "crowd"
-    ? `god just posted in the chat: "${r.god ?? ""}". The chat reacts to him AND to each other (at least two lines reply to another cast member, and at least one person disagrees with someone).`
+    ? `${P} just posted in the chat: "${r.god ?? ""}". The chat reacts to them AND to each other (at least two lines reply to another cast member, and at least one person disagrees with someone).`
     : r.mode === "moment"
-      ? `This just happened: ${r.moment ?? ""}. The chat reacts to it right away.`
-      : `The chat keeps going on its own${r.about ? `, around ${r.about}` : ""}. God is not talking right now.`;
+      ? `This just happened: ${(r.moment ?? "").replace(/\bgod\b/g, P).replace(/\bhis\b/g, "their")}. The chat reacts to it right away.`
+      : `The chat keeps going on its own${r.about ? `, around ${r.about.replace(/\bgod\b/g, P)}` : ""}. ${P} is not talking right now.`;
   return [
     `Place: #${r.place.channel} in the ${r.place.server} server${r.place.topic ? ` (channel topic: ${r.place.topic})` : ""}.`,
     "Cast (only these people may speak):",
-    ...r.cast.map((c) => "- " + castLine(c)),
+    ...r.cast.map((c) => "- " + castLine(c, P)),
     "",
     "Recent messages (oldest first):",
     hist || "(quiet so far)",
@@ -274,7 +283,7 @@ export function validMeme(x: unknown): SceneMeme | undefined {
 const oneLine = (raw: string, who: string) => cleanLines(raw.replace(/\n+/g, " "), who)[0];
 
 /** parse + validate a scene: only cast members speak, every line passes the flavor guard, capped at 8 */
-export function parseScene(raw: string, cast: string[], max = 8): SceneLine[] {
+export function parseScene(raw: string, cast: string[], max = 8, player = "god"): SceneLine[] {
   const names = new Map(cast.map((c) => [c.toLowerCase(), c]));
   let o: unknown;
   try { o = JSON.parse(raw.replace(/^```(json)?\s*|\s*```$/g, "").trim()); } catch { return []; }
@@ -289,7 +298,7 @@ export function parseScene(raw: string, cast: string[], max = 8): SceneLine[] {
     if (!text) continue;
     const to = cut(r.to, 40).replace(/^@/, "").trim();
     const line: SceneLine = { who, text: text.length > 200 ? text.slice(0, 197) + "..." : text };
-    if (to && to.toLowerCase() !== who.toLowerCase()) line.to = to.toLowerCase() === "god" ? "god" : to;
+    if (to && to.toLowerCase() !== who.toLowerCase()) line.to = to.toLowerCase() === "god" || to.toLowerCase() === player.toLowerCase() ? "god" : to;
     const meme = !out.some((l) => l.meme) ? validMeme(r.meme) : undefined;
     if (meme) line.meme = meme;
     out.push(line);

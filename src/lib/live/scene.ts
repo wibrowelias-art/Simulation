@@ -68,6 +68,7 @@ export async function liveScene(s: WorldState, group: Message[], o: SceneOpts, h
     place: { server: srv.name, channel: ch.name, topic: ch.topic },
     history: visibleHistory(s, ch.id, now, o.god?.id), about: o.about, god: o.god?.text, moment: o.moment, first: o.first,
     lines: clamp(slots.length, 3, 8), memes: o.mode !== "moment" && (h.random ?? Math.random)() < 0.3,
+    player: s.player.handle ?? "god",
   };
   let lines: SceneLine[] = [];
   try {
@@ -77,7 +78,7 @@ export async function liveScene(s: WorldState, group: Message[], o: SceneOpts, h
     clearTimeout(t);
     const j = (await res.json().catch(() => ({}))) as { lines?: unknown; code?: string; model?: string };
     // validate again on this side: only the cast speaks, every line passes the flavor guard
-    lines = res.ok && Array.isArray(j.lines) ? parseScene(JSON.stringify({ lines: j.lines }), cast.map((c) => c.username), body.lines + 2) : [];
+    lines = res.ok && Array.isArray(j.lines) ? parseScene(JSON.stringify({ lines: j.lines }), cast.map((c) => c.username), body.lines + 2, body.player) : [];
     noteResult(res, j, lines.length > 0);
   } catch { /* timeout / offline */ }
   if (timer) clearInterval(timer);
@@ -113,7 +114,7 @@ export async function liveScene(s: WorldState, group: Message[], o: SceneOpts, h
     m.ai = true;
     const to = l.to?.toLowerCase();
     m.replyTo = to === "god" ? o.god?.id ?? lastBy.get("god") : to ? lastBy.get(to) : undefined;
-    m.mentionsGod = (to === "god" && !!o.god) || /@god\b/i.test(l.text) || undefined;
+    m.mentionsGod = (to === "god" && !!o.god) || /@god\b/i.test(l.text) || new RegExp(`@${(s.player.handle ?? "god").replace(/[.]/g, "\\.")}\\b`, "i").test(l.text) || undefined;
     if (l.meme) m.meme = memeFromText(l.meme, mood(c), (at + i * 7919) % 1e6);
     if (!slot) { s.pending.push(m); s.stats.messages++; c.postCount++; }
     lastBy.set(c.username.toLowerCase(), m.id);

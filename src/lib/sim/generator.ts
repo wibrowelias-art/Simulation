@@ -72,6 +72,7 @@ export function slotsFor(rng: Rng, state: WorldState, c: Character | undefined, 
   };
 }
 
+const TRADES = new Set(["trade", "tradeWin", "tradeLoss"]);
 const WORLD_FALLBACK = ["the game last night", "that new show everyone's watching", "the weather today", "the new phone ads", "that cooking video going around", "the concert tickets drama"];
 const PURCHASE = /\b(buys?|bought|purchase|accountant|bank app|lunch money|second fridge)\b|\{amt\}|\{subj\}/;
 const BUYING = new Set(["island", "property", "jet", "vehicle", "business", "coin", "investment", "acquisition", "hire", "organization", "event"]);
@@ -106,7 +107,7 @@ export const TemplateGenerator: ContentGenerator = {
         if (!topic) { tpl = rng.pick(PERSONAL); break; }
         if (topic.about === "world") { tpl = rng.pick(WORLD_OPEN[topic.category] ?? WORLD_OPEN.drama); break; }
         if (!topic.facts.action && CAT_OPEN[topic.category] && rng.chance(0.75)) tpl = (() => { const base = rng.pick(CAT_OPEN[topic.category]); return rng.chance(0.55) ? `${base}${/[?!]$/.test(base) ? " " : rng.pick([". ", ", ", " "])}${rng.pick(STANCE_TAIL[c.stance])}` : base; })();
-        else if (!topic.facts.action) tpl = rng.chance(0.5) && CAT_OPEN[topic.category] ? rng.pick(CAT_OPEN[topic.category]) : rng.pick(GOD_STORY[c.stance]);
+        else if (!topic.facts.action) tpl = (TRADES.has(topic.category) || rng.chance(0.5)) && CAT_OPEN[topic.category] ? rng.pick(CAT_OPEN[topic.category]) : rng.pick(GOD_STORY[c.stance]);
         else tpl = CAT_OPEN[topic.category] && rng.chance(0.35) ? rng.pick(CAT_OPEN[topic.category]) : pickFitting(rng, GOD_OPEN[c.stance], topic, c.stance);
         break;
       case "personal": {
@@ -138,6 +139,7 @@ export const TemplateGenerator: ContentGenerator = {
     const slots = slotsFor(rng, ctx.state, c, topic);
     let tpl: string;
     if (!topic) tpl = rng.pick(CHIRP_LIFE);
+    else if (TRADES.has(topic.category)) tpl = rng.pick(CAT_OPEN[topic.category]) + " {tag}";
     else if (topic.about === "god") tpl = rng.chance(0.7) ? pickFitting(rng, CHIRP_GOD[c.stance], topic, c.stance) : (topic.facts.action ? pickFitting(rng, GOD_OPEN[c.stance], topic, c.stance) : rng.pick(GOD_STORY[c.stance])) + " {tag}";
     else tpl = rng.pick(WORLD_OPEN[topic.category] ?? WORLD_OPEN.drama) + " {tag}";
     let text = expand(tpl, slots, rng);

@@ -77,6 +77,7 @@ export function easeDay(c: Character, days: number) {
 /** "his dog is called Biscuit" -> "your dog is called Biscuit" (for bringing a fact up to god's face) */
 export function toYou(fact: string): string {
   return fact
+    .replace(/\bthemselves\b/gi, "yourself").replace(/\btheir\b/gi, "your").replace(/\bthey're\b/gi, "you're").replace(/\bthey are\b/gi, "you are")
     .replace(/\bhimself\b/gi, "yourself").replace(/\bhe's\b/gi, "you're").replace(/\bhe is\b/gi, "you are").replace(/\bhe was\b/gi, "you were")
     .replace(/\bhe has\b/gi, "you have").replace(/\bhis\b/gi, "your").replace(/\bhim\b/gi, "you").replace(/\bhe\b/gi, "you")
     .replace(/\byou (likes|loves|hates|wants|has|does|goes|plays|lives|works|owns|thinks)\b/gi, (_m, v: string) => `you ${v === "has" ? "have" : v === "does" ? "do" : v === "goes" ? "go" : v.replace(/s$/, "")}`);

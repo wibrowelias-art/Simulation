@@ -24,7 +24,7 @@ export function AwaySummary({ s }: { s: Summary }) {
         </div>
         {s.highlights.length > 0 && <div className="mt-4"><div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">Highlights</div><ul className="space-y-1.5 text-[14px]">{s.highlights.map((h, i) => <li key={i} className="flex gap-2"><span className="text-gold">◆</span>{h}</li>)}</ul></div>}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div><div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">Trended</div>{s.topTopics.map((t) => <button key={t.tag} onClick={() => { dismissSummary(); go(`/chirp/tag/${t.tag}`); }} className="block text-[13px] text-brand">#{t.tag}</button>)}</div>
+          <div><div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">Trended</div>{s.topTopics.map((t) => <button key={t.tag} onClick={() => { dismissSummary(); go(`/feed/tag/${t.tag}`); }} className="block text-[13px] text-brand">#{t.tag}</button>)}</div>
           <div><div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">Loudest servers</div>{s.topServers.map((t) => <div key={t.name} className="flex justify-between text-[13px]"><span>{t.name}</span><span className="num text-muted">{fmtCount(t.count)}</span></div>)}</div>
         </div>
         <div className="mt-5 flex items-center justify-between"><span /><button onClick={dismissSummary} className="btn btn-gold">Catch up</button></div>
@@ -50,7 +50,7 @@ export function BreakingOverlay({ r }: { r: RippleResult }) {
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">{r.servers.slice(0, 8).map((n) => <span key={n} className="rounded-full border border-line px-2 py-0.5 text-[11px]">{n}</span>)}</div>
           <div className="mt-5 flex flex-wrap items-center gap-2">
-            <button onClick={() => { dismissBreaking(); go(`/chirp/tag/${r.topic.tag}`); }} className="btn btn-gold">See the reaction</button>
+            <button onClick={() => { dismissBreaking(); go(`/feed/tag/${r.topic.tag}`); }} className="btn btn-gold">See the reaction</button>
             {r.articles[0] && <button onClick={() => { dismissBreaking(); go(`/news/${r.articles[0].id}`); }} className="btn">Read coverage</button>}
           </div>
         </div>

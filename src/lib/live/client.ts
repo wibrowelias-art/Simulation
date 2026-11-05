@@ -26,7 +26,7 @@ export function noteResult(res: { ok: boolean; status: number }, j: { code?: str
   else if (j.code === "no_auth" || j.code === "customer_verification_required" || j.code === "insufficient_funds" || res.status === 404) status = { ...status, state: "unavailable", reason: j.code ?? `http ${res.status}` };
 }
 
-export const nameOf = (s: WorldState, id: string) => (id === "god" ? "god" : id.startsWith("c") ? charById(s, id)?.username ?? "someone" : "bot");
+export const nameOf = (s: WorldState, id: string) => (id === "god" ? s.player.handle ?? "god" : id.startsWith("c") ? charById(s, id)?.username ?? "someone" : "bot");
 
 export function persona(c: Character, st: WorldState): LiveRequest["persona"] {
   const names = (ids: string[]) => ids.slice(0, 4).map((id) => charById(st, id)?.username).filter((x): x is string => !!x);
@@ -119,6 +119,7 @@ export async function liveReply(s: WorldState, god: Message, fresh: Message[], h
     god: god.text,
     replyingTo: target && target.authorId === c.id ? target.text : undefined,
     allowBreak: !!s.settings.breakCharacter,
+    player: s.player.handle ?? "god",
   };
 
   let lines: string[] | undefined, remember: string | undefined, meme: SceneMeme | undefined;

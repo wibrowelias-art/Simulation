@@ -71,7 +71,7 @@ describe("relationships", () => {
     expect(relOf(c, "god")).toBeLessThan(-10); // still sore two days later
     expect(c.opinion + relOf(c, "god") * 0.8).toBeLessThan(warmBefore - 15);
     const sys = instructions(sanitize({ ...persona(c, s), god: "hey", persona: persona(c, s) } as unknown)!);
-    expect(sys).toMatch(/still annoyed with god/);
+    expect(sys).toMatch(/still annoyed with @?god/);
     if (c.stance === "worshipper") expect(obsessionOf(c)).toBe("skeptic");
   }, 60_000);
 

@@ -100,7 +100,13 @@ export function Section({ title, right, children, className }: { title: React.Re
 /** the player's handle: the engine mentions the player as "@god" internally; everything visible shows the handle */
 let playerHandle = "god";
 export const setPlayerHandle = (h: string) => { playerHandle = h || "god"; };
-export const showHandle = (text: string) => (playerHandle === "god" ? text : text.replace(/@god\b/gi, `@${playerHandle}`));
+export const showHandle = (text: string) => {
+  if (!text || playerHandle === "god") return text;
+  return text
+    .replace(/@god\b/gi, `@${playerHandle}`)
+    // the engine's lines call the player "god"; on screen they use the player's handle
+    .replace(/(^|[^@\w])(GOD|God|god)\b/g, (_m, pre: string, w: string) => pre + (w === "GOD" ? playerHandle.toUpperCase() : playerHandle));
+};
 
 export function RichText({ text: raw, onTag, onUser }: { text: string; onTag?: (t: string) => void; onUser?: (h: string) => void }) {
   const text = showHandle(raw);

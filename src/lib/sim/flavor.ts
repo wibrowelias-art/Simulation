@@ -21,7 +21,7 @@ const RULES: [name: string, re: RegExp][] = [
 
 export function flavorProblems(text: string): string[] {
   // in-world @handles (e.g. @quinn.exe) are names, not files or addresses
-  const t = text.replace(/(^|\s)@[\w.]+/g, "$1@user");
+  const t = text.replace(/(^|[\s(\["'“‘])@[\w.]+/g, "$1@user");
   return RULES.filter(([, re]) => re.test(t)).map(([n]) => n);
 }
 export const isFlavorSafe = (text: string) => flavorProblems(text).length === 0;

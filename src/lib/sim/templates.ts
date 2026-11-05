@@ -108,12 +108,17 @@ export const CAT_OPEN: Record<string, string[]> = {
   acquisition: ["someone offered {amt} for {subj}", "{subj} buyout rumors heating up", "{god} turned down {amt}? or took it?"],
   interview: ["{god} interview with {outlet} is out", "the {outlet} interview clip where {god} smirks", "best quote from the {outlet} interview: \"{subj}\""],
   mention: ["{celeb} just mentioned {god}", "{celeb} said {god}'s name on stream", "{celeb} vs {god} beef incoming?"],
+  // the player's paper trades (Kiteline), as the world sees them
+  trade: ["{god} just aped {amt} into {subj} 👀", "{god} bought {subj}. i'm following", "wait {god} is in {subj}??", "{amt} into {subj} is crazy conviction", "{god} buying {subj} here is either genius or a donation",
+    "screenshot this: {god} entered {subj}", "if {god} is in {subj} i'm in", "{subj} about to get the {god} effect", "not {god} buying {subj} after everyone said it's dead", "fading {god}'s {subj} buy, sorry", "{god} bought {subj} and i bought the top of {god}'s buy 💀", "who else saw {god} grab {subj}"],
+  tradeWin: ["{god} just took {amt} profit on {subj} 😭", "{god} sold {subj} for a W. teach me", "{subj} paid {god}, again", "imagine being up {amt} on {subj} like {god}", "{god} called {subj} and actually took profit. respect", "{god} out of {subj} green. i'm still holding mine lol"],
+  tradeLoss: ["{god} just ate a {amt} loss on {subj} 💀", "{god} sold {subj} red. it happens", "even {god} got cooked by {subj}", "{subj} took {amt} from {god}. pour one out", "{god} panic sold {subj}? lol", "{god} cutting {subj} at a loss is actually discipline"],
 };
 
 /** World (non-god) topics. */
 export const WORLD_OPEN: Record<string, string[]> = {
   celebrity: ["{celeb} {subj}", "did yall see {celeb} {subj}", "{celeb} really {subj} {laugh}", "the {celeb} thing is all over my feed", "nobody's talking about god today, it's all {celeb}", "{celeb} {subj} and i have so many questions"],
-  crypto: ["{subj}", "${coin} {subj}", "anyone else watching ${coin} rn", "${coin} is the only thing i care about today", "${coin} holders right now: {laugh}"],
+  crypto: ["{label}", "${coin} {subj}", "anyone else watching ${coin} rn", "${coin} is the only thing i care about today", "${coin} holders right now: {laugh}"],
   gaming: ["{subj}", "the {subj} thing is crazy", "patch day and {subj}", "{subj}?? my main is dead"],
   tech: ["{subj}", "the {subj} launch event was so awkward", "{subj} and the replies are brutal"],
   sports: ["{subj}", "did anyone watch? {subj}", "{subj}. i'm devastated"],

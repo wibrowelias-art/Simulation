@@ -86,7 +86,7 @@ function jobFor(body: unknown): Job | undefined {
     const r = sanitizeScene(body);
     if (!r) return;
     const cast = r.cast.map((c) => c.username);
-    return { system: sceneInstructions(r), prompt: scenePrompt(r), maxTokens: 120 + r.lines * 70, parse: (t) => { const lines = parseScene(t, cast, r.lines + 2); return lines.length ? { lines } : undefined; } };
+    return { system: sceneInstructions(r), prompt: scenePrompt(r), maxTokens: 120 + r.lines * 70, parse: (t) => { const lines = parseScene(t, cast, r.lines + 2, r.player); return lines.length ? { lines } : undefined; } };
   }
   const r = sanitize(body);
   if (!r) return;
