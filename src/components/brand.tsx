@@ -11,8 +11,9 @@ export function AppMark({ app, size = 60 }: { app: AppId; size?: number }) {
     case "wallet": // a lantern-lure over a dark sea
       return (
         <svg {...common} style={{ borderRadius: r }}>
-          <defs><linearGradient id="lf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#16202b" /><stop offset="1" stopColor="#07090c" /></linearGradient></defs>
+          <defs><linearGradient id="lf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#22344a" /><stop offset="1" stopColor="#0a0e14" /></linearGradient></defs>
           <rect width="64" height="64" fill="url(#lf)" />
+          <rect x=".5" y=".5" width="63" height="63" rx="15" fill="none" stroke="#fff" strokeOpacity=".1" />
           <path d="M18 40c6-9 18-12 28-6-4 1-6 3-6 6s2 5 6 6c-10 6-22 3-28-6Z" fill="#e8edf2" />
           <circle cx="26" cy="38" r="1.8" fill="#07090c" />
           <path d="M30 31c-1-6 1-11 6-14" stroke="#e8edf2" strokeWidth="2" fill="none" strokeLinecap="round" />
