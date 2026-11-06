@@ -12,7 +12,7 @@ import { crewDmReply, crewRole } from "./undernet";
 import { adjustRel, nudgeMood, relOf, rememberLong, toYou } from "./memory";
 import { COMMAND_BANK, PRESENCE_LINES, findMentioned, godStopTyping, parseCommand } from "./presence";
 import { tagify, COINS } from "./topics";
-import { AFTER, AMBIENT, BY_OBSESSION, CHAIN, DM_OPEN, DM_REPLY, ECHO_OPEN, ECHO_REPLY, FREAK, FREAK_OTHERS, HYPE, LEAD, TO_GOD, type GodIntent } from "./godlines";
+import { AFTER, AMBIENT, BY_OBSESSION, CHAIN, WORSHIP, DM_OPEN, DM_REPLY, ECHO_OPEN, ECHO_REPLY, FREAK, FREAK_OTHERS, HYPE, LEAD, TO_GOD, type GodIntent } from "./godlines";
 
 const SEC = 1000, MIN = 60_000;
 
@@ -55,6 +55,10 @@ const INTENT_EMOJI: Partial<Record<GodIntent, string[]>> = { greeting: ["👋", 
 
 const isCaps = (s: string) => /[A-Z]/.test(s) && !/[a-z]/.test(s.replace(/@[\w.]+|\{[a-z]+\}/gi, ""));
 const fanish = (o: Obsession) => o === "obsessed" || o === "supporter";
+/** 0 = a real mix of fans and haters, 1 = the crowd treats the player like a god (Settings → How people treat you) */
+export const worshipOf = (s: WorldState) => clamp(((s.settings.glazeRatio ?? 0.5) - 0.5) / 0.45, 0, 1);
+/** how much more (or less) likely each kind of person is to speak up about the player, by worship level */
+const tilt = (o: Obsession, W: number) => (o === "obsessed" || o === "supporter" ? 1 + 1.2 * W : o === "hater" || o === "rival" ? 1 - 0.75 * W : o === "skeptic" ? 1 - 0.5 * W : 1);
 const negish = (o: Obsession) => o === "hater" || o === "rival";
 
 function srvChan(s: WorldState, serverId: string, channelId: string) {
@@ -71,7 +75,7 @@ export function pastGodLine(s: WorldState, rng: Rng, excludeId?: string) {
   }
   const h = s.player.history.filter((x) => x.text.startsWith("📝")).slice(-6);
   if (h.length) return { text: rng.pick(h).text.replace(/^📝 Posted on \w+: "/, "").replace(/"$/, "").slice(0, 44), where: "Chirp" };
-  return { text: "life is easier on creative mode", where: "Chirp" };
+  return { text: "diamond hands only. see you at the top", where: "Murmur" };
 }
 
 interface Ctx { s: WorldState; rng: Rng; srv: Server; ch: Channel; god: Message; p: ParsedGod; now: number; topic: Topic }
@@ -118,7 +122,8 @@ function audience(x: Ctx, weightFor: (o: Obsession, c: Character) => number, exc
   if (!pool.length) return undefined;
   const id = x.rng.weighted(pool, (id) => {
     const c = charById(x.s, id);
-    return weightFor(obsessionOf(c), c) * (0.25 + diurnal(c, t)) * Math.sqrt(c.activity) * (c.core ? 3 : 1) * (1 + (c.bond ?? 0) / 40);
+    const o = obsessionOf(c);
+    return weightFor(o, c) * tilt(o, worshipOf(x.s)) * (0.25 + diurnal(c, t)) * Math.sqrt(c.activity) * (c.core ? 3 : 1) * (1 + (c.bond ?? 0) / 40);
   });
   return charById(x.s, id);
 }
@@ -168,6 +173,9 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
   god.topicId = topic.id;
   const x: Ctx = { s, rng, srv, ch, god, p, now, topic };
   const act = clamp(s.settings.activity, 0.4, 3);
+  const W = worshipOf(s);
+  /** fans answering a hater in worship mode call it blasphemy */
+  const defendOr = (bank: string[]) => (bank === CHAIN.fanToHater && rng.chance(0.65 * W) ? WORSHIP.defend : bank);
 
   const target = replyTo ? [...s.messages, ...s.pending].find((m) => m.id === replyTo) : undefined;
   // direct address: a reply, or an @mention of someone (in this server first, then anywhere)
@@ -226,12 +234,12 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
     if (!c) break;
     const ob = obsessionOf(c);
     const r = rng.next();
-    const bank = fanish(ob) ? (r < 0.35 ? LEAD[ob] : r < 0.65 ? TO_GOD[p.intent] : HYPE) : r < 0.6 ? BY_OBSESSION[ob] : LEAD[ob];
+    const bank = fanish(ob) && rng.chance(0.8 * W) ? WORSHIP.praise : (ob === "skeptic" || ob === "indifferent") && rng.chance(0.35 * W) ? WORSHIP.converted : fanish(ob) ? (r < 0.35 ? LEAD[ob] : r < 0.65 ? TO_GOD[p.intent] : HYPE) : r < 0.6 ? BY_OBSESSION[ob] : LEAD[ob];
     if (i === 1 && firstWave[0] && firstWave[0].authorId.startsWith("c")) {
       // the second voice answers the first: character-to-character from the very first seconds
       const B = charById(s, firstWave[0].authorId), obB = obsessionOf(B);
       const chainBank = fanish(ob) && negish(obB) ? CHAIN.fanToHater : negish(ob) && fanish(obB) ? CHAIN.haterToFan : fanish(ob) && fanish(obB) ? CHAIN.fanToFan : CHAIN.noticed;
-      firstWave.push(say(c, line(s, rng, c, chainBank, slots(x, c, B)), { replyTo: firstWave[0].id, intent: "chain", gap: [0.4 * SEC, 1.1 * SEC], typingStart: now + rng.range(0.5, 1.6) * SEC }));
+      firstWave.push(say(c, line(s, rng, c, defendOr(chainBank), slots(x, c, B)), { replyTo: firstWave[0].id, intent: "chain", gap: [0.4 * SEC, 1.1 * SEC], typingStart: now + rng.range(0.5, 1.6) * SEC }));
       continue;
     }
     const txt = line(s, rng, c, bank, slots(x, c), { lead: bank === LEAD[ob] ? undefined : LEAD[ob] });
@@ -251,9 +259,9 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
       const A = fanLine && audience(x, (o) => (fanB ? (negish(o) ? 5 : o === "skeptic" ? 3 : o === "indifferent" ? 0.6 : 0.01) : fanish(o) ? 5 : 0.01), new Set([fanLine.authorId]), b.cur);
       if (fanLine && A && fanish(obsessionOf(A)) !== fanB) {
         const B = charById(s, fanLine.authorId);
-        say(A, line(s, rng, A, !fanB ? CHAIN.fanToHater : negish(obsessionOf(A)) ? CHAIN.haterToFan : CHAIN.skepticToFan, slots(x, A, B)), { replyTo: fanLine.id, intent: "disagree", gap: [0.9 * SEC, 2.4 * SEC] });
+        say(A, line(s, rng, A, !fanB ? defendOr(CHAIN.fanToHater) : negish(obsessionOf(A)) ? CHAIN.haterToFan : CHAIN.skepticToFan, slots(x, A, B)), { replyTo: fanLine.id, intent: "disagree", gap: [0.9 * SEC, 2.4 * SEC] });
         conflicts++;
-        if (rng.chance(0.7)) say(B, line(s, rng, B, fanB ? CHAIN.fanToHater : CHAIN.haterToFan, slots(x, B, A)), { replyTo: b.msgs[b.msgs.length - 1].id, intent: "disagree", gap: [1 * SEC, 2.6 * SEC] });
+        if (rng.chance(0.7)) say(B, line(s, rng, B, fanB ? defendOr(CHAIN.fanToHater) : CHAIN.haterToFan, slots(x, B, A)), { replyTo: b.msgs[b.msgs.length - 1].id, intent: "disagree", gap: [1 * SEC, 2.6 * SEC] });
         continue;
       }
     }
@@ -271,12 +279,13 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
       // direct, contextual reply to what god said
       const c = audience(x, (o) => ({ obsessed: 4, supporter: 3, business: 2, skeptic: 1, rival: 0.6, hater: 0.6, indifferent: 0.3 })[o], new Set(), b.cur);
       if (!c) continue;
-      say(c, line(s, rng, c, TO_GOD[p.intent], slots(x, c)), { replyTo: rng.chance(0.5) ? god.id : undefined, intent: "toGod", gap });
+      say(c, line(s, rng, c, rng.chance((fanish(obsessionOf(c)) ? 0.75 : 0.3) * W) ? WORSHIP.praise : TO_GOD[p.intent], slots(x, c)), { replyTo: rng.chance(0.5) ? god.id : undefined, intent: "toGod", gap });
     } else if (r < 0.42) {
       const c = audience(x, (o) => ({ obsessed: 2, supporter: 1.5, business: 1.5, skeptic: 1.6, rival: 1.6, hater: 1.8, indifferent: 0.5 })[o], new Set(), b.cur);
       if (!c) continue;
       const ob = obsessionOf(c);
-      say(c, line(s, rng, c, BY_OBSESSION[ob], slots(x, c)), { replyTo: ob === "business" && rng.chance(0.4) ? god.id : undefined, intent: `stance:${ob}`, gap });
+      const bank = fanish(ob) && rng.chance(0.7 * W) ? WORSHIP.praise : (ob === "skeptic" || ob === "indifferent" || ob === "business") && rng.chance(0.4 * W) ? WORSHIP.converted : BY_OBSESSION[ob];
+      say(c, line(s, rng, c, bank, slots(x, c)), { replyTo: ob === "business" && rng.chance(0.4) ? god.id : undefined, intent: `stance:${ob}`, gap });
     } else if (r < 0.7 && b.msgs.length) {
       // character → character
       const pick = rng.chance(0.6) ? prev : rng.pick(b.msgs);
@@ -294,12 +303,14 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
       else if (oa === "skeptic" && fanish(ob)) { bank = CHAIN.skepticToFan; clash = true; }
       else if (fanish(oa) && fanish(ob)) bank = rng.chance(0.7) ? CHAIN.fanToFan : CHAIN.noticed;
       else bank = CHAIN.noticed;
-      say(A, line(s, rng, A, bank, slots(x, A, B)), { replyTo: clash || rng.chance(0.75) ? pick.id : undefined, intent: clash ? "disagree" : "chain", gap });
+      say(A, line(s, rng, A, defendOr(bank), slots(x, A, B)), { replyTo: clash || rng.chance(0.75) ? pick.id : undefined, intent: clash ? "disagree" : "chain", gap });
       if (rng.chance(0.25)) (pick.reactionLog ??= []).push([rng.pick(negish(oa) ? ["💀", "🤡"] : ["😭", "💯", "🔥"]), Math.round(b.cur + rng.range(1, 6) * SEC), A.id]);
     } else if (r < 0.78) {
       const c = audience(x, (o) => (fanish(o) ? 2 : o === "business" ? 1.5 : 0.6), new Set(), b.cur);
       if (!c) continue;
-      say(c, line(s, rng, c, CHAIN.memory, slots(x, c)), { intent: "memory", gap });
+      // "remember when they said…" needs something older to remember; otherwise more praise (or a question)
+      const older = s.godLog.some((g) => g.serverId !== "dm" && g.id !== god.id);
+      say(c, line(s, rng, c, older ? CHAIN.memory : rng.chance(W) ? WORSHIP.praise : CHAIN.upTo, slots(x, c)), { intent: "memory", gap });
     } else if (r < 0.85) {
       const c = audience(x, (o) => (fanish(o) || o === "business" ? 2 : 0.5), new Set(), b.cur);
       if (!c) continue;
@@ -310,7 +321,7 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
       const q = say(late, line(s, rng, late, CHAIN.catchUp, slots(x, late)), { intent: "catchUp", gap });
       const ans = audience(x, (o) => (fanish(o) ? 2 : 1), new Set([late.id]), b.cur);
       if (ans) say(ans, line(s, rng, ans, CHAIN.catchUpAnswer, slots(x, ans, late)), { replyTo: q.id, intent: "answer", gap: [1.5 * SEC, 5 * SEC] });
-    } else if (i > total / 2 && drifted < 2) {
+    } else if (i > total / 2 && drifted < (W > 0.5 ? 1 : 2)) {
       drifted++;
       const c = audience(x, (o) => (o === "indifferent" ? 4 : negish(o) ? 1.5 : 0.6), new Set(), b.cur);
       if (!c) continue;
@@ -470,6 +481,7 @@ export function godBuzz(s: WorldState, z: { serverId: string; channelId: string;
   const said: Message[] = [];
   const say = (c: Character, txt: string, o: Parameters<Burst["push"]>[2]) => { const m = bu.push(c, txt, o); m.episodeId = epId; said.push(m); return m; };
   const weights = { obsessed: 5, supporter: 3, business: 1.2, skeptic: 1, rival: 0.9, hater: 1, indifferent: 0.35 } as Record<Obsession, number>;
+  const W = worshipOf(s);
 
   const n = Math.round(clamp(3 + heat * 3 + rng.poisson(2), 4, 18));
   for (let i = 0; i < n; i++) {
@@ -482,7 +494,7 @@ export function godBuzz(s: WorldState, z: { serverId: string; channelId: string;
       const A = audience(x, (o) => (fanish(obB) ? (negish(o) || o === "skeptic" ? 2.5 : fanish(o) ? 2 : 0.4) : fanish(o) ? 4 : 0.6), new Set([B.id]), bu.cur);
       if (!A) continue;
       const oa = obsessionOf(A);
-      const bank = fanish(oa) && negish(obB) ? CHAIN.fanToHater : negish(oa) && fanish(obB) ? CHAIN.haterToFan : oa === "skeptic" && fanish(obB) ? CHAIN.skepticToFan : AFTER.answer;
+      const bank = fanish(oa) && negish(obB) ? (rng.chance(0.65 * W) ? WORSHIP.defend : CHAIN.fanToHater) : negish(oa) && fanish(obB) ? CHAIN.haterToFan : oa === "skeptic" && fanish(obB) ? CHAIN.skepticToFan : AFTER.answer;
       say(A, line(s, rng, A, bank, slots(x, A, B, extra)), { replyTo: prev.id, intent: bank === AFTER.answer ? "chain" : "disagree", gap });
       continue;
     }
@@ -492,7 +504,7 @@ export function godBuzz(s: WorldState, z: { serverId: string; channelId: string;
     let bank: string[];
     let replyTo: string | undefined;
     if (many && r < 0.55) bank = negish(ob) ? AFTER.multiNeg : AFTER.multi;
-    else if (r < 0.75) bank = negish(ob) || (ob === "indifferent" && rng.chance(0.5)) ? AFTER.neg : AFTER.fan;
+    else if (r < 0.75) bank = negish(ob) || (ob === "indifferent" && rng.chance(0.5)) ? (rng.chance(0.35 * W) ? WORSHIP.converted : AFTER.neg) : rng.chance(0.7 * W) ? WORSHIP.praise : AFTER.fan;
     else if (r < 0.84) { bank = TO_GOD[p.intent]; replyTo = rng.chance(0.5) ? god.id : undefined; }
     else if (r < 0.9) bank = fanish(ob) ? HYPE : BY_OBSESSION[ob];
     else if (r < 0.95 && s.godLog.some((g) => g.serverId !== "dm" && g.id !== latest.id)) bank = CHAIN.memory; // only with something older to bring up

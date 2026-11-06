@@ -37,8 +37,11 @@ export interface LiveRequest {
   god: string; // what the player just said
   replyingTo?: string; // their own message the player replied to
   player?: string; // the player's handle (they appear as @handle)
+  worship?: number; // 0 = a real mix, 1 = the crowd treats the player like a god
   allowBreak?: boolean; // user turned on "characters can break character" in Settings
 }
+
+const worshipNum = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0; };
 
 /** the player's handle as the model sees it; old clients send none and get "god" */
 export const handleOf = (h: unknown) => (typeof h === "string" ? h.toLowerCase().replace(/[^\w.]/g, "").slice(0, 24) : "") || "god";
@@ -68,7 +71,7 @@ export function sanitize(b: unknown): LiveRequest | undefined {
     god,
     replyingTo: cut(r.replyingTo, 300) || undefined,
     allowBreak: !!r.allowBreak,
-    player: handleOf(r.player),
+    player: handleOf(r.player), worship: worshipNum(r.worship),
   };
 }
 
@@ -92,7 +95,12 @@ export function feeling(o: number, who = "god") {
 export function instructions(r: LiveRequest): string {
   const p = r.persona;
   const P = `@${r.player ?? "god"}`;
-  const glaze = p.opinion > 60 ? "You are a big fan, so you hype them, but you still talk about your own stuff too." : "Do not suck up to them. Treat them like a normal person in the chat: tease them, disagree when you disagree, get bored, change the subject.";
+  const W = r.worship ?? 0;
+  const glaze = W >= 0.6
+    ? p.opinion < -20
+      ? `Almost everyone here worships ${P} like a god. You are one of the few holdouts: grumble, roll your eyes, but you are slowly cracking.`
+      : `In this world ${P} is treated like a living god, and you worship them: over-the-top praise and devotion ("all hail ${P}", "we are not worthy", treating their words like scripture), mixed with your own jokes and life. Never cold or dismissive toward them.`
+    : p.opinion > 60 ? "You are a big fan, so you hype them, but you still talk about your own stuff too." : "Do not suck up to them. Treat them like a normal person in the chat: tease them, disagree when you disagree, get bored, change the subject.";
   return [
     `You are ${p.name} (@${p.username}), a regular person chatting in an online community app called the Lounge. You are a fictional character in a fictional world. Never claim to be a real person who exists outside this world, and never name real celebrities, companies or platforms as if you know them.`,
     r.allowBreak ? "If someone sincerely asks whether you are an AI, you may say yes." : "Stay in character. Never say or hint that you are an AI, a bot, a language model, an assistant or a character. Never say 'As an AI'. If asked, deflect like a real person would (\"bro what 💀\").",
@@ -191,6 +199,7 @@ export interface SceneRequest {
   first?: string; // username that must speak first (e.g. the person god reacted to)
   lines: number; // how many chat lines to write (3..8)
   player?: string; // the player's handle
+  worship?: number; // 0 = a real mix, 1 = the crowd treats the player like a god
   memes?: boolean; // may attach a meme to one line
 }
 
@@ -218,7 +227,7 @@ export function sanitizeScene(b: unknown): SceneRequest | undefined {
     history: (Array.isArray(r.history) ? r.history : []).slice(-30).map((x) => ({ who: cut((x as LiveLine)?.who, 40), text: cut((x as LiveLine)?.text, 240) })).filter((x) => x.who && x.text),
     about: cut(r.about, 160) || undefined, god: cut(r.god, 400) || undefined, moment: cut(r.moment, 240) || undefined,
     first: cut(r.first, 40).replace(/^@/, "") || undefined,
-    lines: Math.max(2, Math.min(8, Math.round(Number(r.lines) || 5))), memes: !!r.memes, player: handleOf(r.player),
+    lines: Math.max(2, Math.min(8, Math.round(Number(r.lines) || 5))), memes: !!r.memes, player: handleOf(r.player), worship: worshipNum(r.worship),
   };
 }
 
@@ -242,6 +251,7 @@ export function sceneInstructions(r: SceneRequest): string {
   return [
     "You write a few messages of a real group chat in the Lounge, an online community app, in a fictional world. Every person is fictional. Never name real celebrities, companies or platforms.",
     `${P} is a memecoin trader everyone in these communities has heard of: known for their calls and P&L screenshots, and getting more famous every week. When someone mentions them, write ${P}.`,
+    (r.worship ?? 0) >= 0.6 ? `Here ${P} is worshipped like a living god. Whenever ${P} comes up, almost everyone praises them over the top: devotion, "all hail", "we are not worthy", "${P} has spoken", treating their words like scripture. A lone hater may grumble and gets shouted down as a heretic. Keep it playful and fun, like fans hyping an idol.` : "",
     "Write like real people texting in a busy server: short (usually 2-12 words), casual, lowercase for younger people, the odd typo, reactions like 'real', 'LMAO', 'wait what'. People talk TO EACH OTHER: reply, agree, argue, dunk, ratio, bring up inside jokes, ask each other questions, change the subject to their own lives (work, school, games, food, plans). Each person keeps their own voice, slang and opinions; fans and haters clash; friends back each other up.",
     "Never sound like an assistant or a bot: no helpful tone, no explanations, no lists, no 'great question', never mention AI. No hashtags, no narration, no actions in asterisks, no name prefixes inside the text. Don't repeat lines from the history.",
     "Keep it PG-13: rude, petty and dramatic is fine; no slurs, hate, sexual content, threats, or real personal info.",

@@ -6,7 +6,7 @@ import { makeCharacter } from "./characters";
 import { CELEB_FIELDS } from "./data";
 import { OUTLETS, SERVER_DEFS } from "./servers";
 
-export const WORLD_VERSION = 9;
+export const WORLD_VERSION = 10;
 export const CORE_CAST = 36;
 export const CHARACTER_COUNT = 380;
 
@@ -75,7 +75,7 @@ export function createWorld(seed: string, now: number): WorldState {
       ],
       history: [], netWorthHistory: [],
     },
-    settings: { activity: 1, glazeRatio: 0.5, drama: 0.5, theme: "midnight", reducedMotion: false },
+    settings: { activity: 1, glazeRatio: 0.95, drama: 0.5, theme: "midnight", reducedMotion: false },
     counter: 0, stats: { messages: 0, posts: 0, articles: 0, pruned: 0 }, recentTexts: [], pending: [], bus: [], godLog: [],
   };
   installUndernet(w, now);
@@ -106,6 +106,8 @@ export function migrateWorld(w: WorldState): WorldState | undefined {
   }
   // v9: the player gets a handle and virtual money (wallet + paper trading). Old saves start with the default stake.
   if (w.version < 9) setupPlayer(w, { now: w.simTime || Date.now() });
+  // v10: the crowd worships the player by default (Settings → How people treat you)
+  if (w.version < 10 && (w.settings.glazeRatio ?? 0.5) <= 0.5) w.settings.glazeRatio = 0.95;
   w.version = WORLD_VERSION;
   return w;
 }

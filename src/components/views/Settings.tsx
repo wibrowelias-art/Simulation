@@ -9,11 +9,14 @@ import { START_OPTIONS, toHandle } from "@/lib/wallet/state";
 import { fmtUsd } from "@/lib/wallet/format";
 import { APP, SUITE } from "@/lib/brand";
 
+const CROWD = [["Real mix", 0.5], ["Big fans", 0.75], ["Worship", 0.95]] as const;
+const crowdOf = (g: number | undefined) => ((g ?? 0.5) >= 0.85 ? 0.95 : (g ?? 0.5) >= 0.65 ? 0.75 : 0.5);
+
 export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} className="grid min-h-[44px] min-w-[52px] shrink-0 place-items-center">
       <span className={clsx("relative h-[31px] w-[51px] rounded-full transition-colors", on ? "bg-accent" : "bg-[var(--surface-3)]")}>
-        <span className={clsx("absolute top-[2px] size-[27px] rounded-full bg-white shadow transition-transform", on ? "translate-x-[22px]" : "translate-x-[2px]")} />
+        <span className={clsx("absolute left-0 top-[2px] size-[27px] rounded-full bg-white shadow transition-transform", on ? "translate-x-[22px]" : "translate-x-[2px]")} />
       </span>
     </button>
   );
@@ -61,6 +64,10 @@ export function SettingsView() {
         <Group title="People" note={live.state === "unavailable" ? "Live replies aren't available on this server right now, so people use their built-in lines." : "People write new replies with a language model on the server, using the recent chat and what they remember about you."}>
           <Row><span className="flex-1 text-[16px] text-fg">Live replies</span><Switch on={st.liveReplies !== false} onChange={(v) => updateSettings({ liveReplies: v })} label="Live replies" /></Row>
           <Row><span className="flex-1 text-[16px] text-fg">Let people break character<span className="block text-[13px] text-muted">If you sincerely ask whether they&apos;re an AI, they may say yes.</span></span><Switch on={!!st.breakCharacter} onChange={(v) => updateSettings({ breakCharacter: v })} label="Let people break character" /></Row>
+        </Group>
+
+        <Group title="How people treat you" note="Worship: almost everyone praises you like a god and heretics get shouted down. Real mix: fans, haters and people who don't care.">
+          <Row className="gap-2 py-3">{CROWD.map(([label, v]) => <button key={label} aria-pressed={crowdOf(st.glazeRatio) === v} onClick={() => updateSettings({ glazeRatio: v })} className={clsx("min-h-[44px] flex-1 rounded-full px-3 text-[15px] font-semibold", crowdOf(st.glazeRatio) === v ? "bg-accent text-accent-ink" : "bg-[var(--surface-3)] text-fg")}>{label}</button>)}</Row>
         </Group>
 
         <Group title="Display">

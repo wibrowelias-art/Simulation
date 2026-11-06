@@ -1,6 +1,7 @@
 /** Client side of live conversations: picks who answers @god, asks /api/chat, and swaps the scripted line for the real one. */
 import type { Character, Message, WorldState } from "@/lib/sim/types";
 import { charById } from "@/lib/sim/world";
+import { worshipOf } from "@/lib/sim/godspeak";
 import { obsessionOf } from "@/lib/sim/social";
 import { crewRole } from "@/lib/sim/undernet";
 import { validMeme, voiceNormalize, type CastCard, type LiveLine, type LiveRequest, type SceneMeme } from "./prompt";
@@ -119,7 +120,7 @@ export async function liveReply(s: WorldState, god: Message, fresh: Message[], h
     god: god.text,
     replyingTo: target && target.authorId === c.id ? target.text : undefined,
     allowBreak: !!s.settings.breakCharacter,
-    player: s.player.handle ?? "god",
+    player: s.player.handle ?? "god", worship: worshipOf(s),
   };
 
   let lines: string[] | undefined, remember: string | undefined, meme: SceneMeme | undefined;

@@ -5,6 +5,7 @@
  */
 import type { Character, Message, WorldState } from "@/lib/sim/types";
 import { charById } from "@/lib/sim/world";
+import { worshipOf } from "@/lib/sim/godspeak";
 import { channelMessages, rememberText, seenText, textAt } from "@/lib/sim/engine";
 import { memeFromText } from "@/lib/sim/memes";
 import { crewRole } from "@/lib/sim/undernet";
@@ -68,7 +69,7 @@ export async function liveScene(s: WorldState, group: Message[], o: SceneOpts, h
     place: { server: srv.name, channel: ch.name, topic: ch.topic },
     history: visibleHistory(s, ch.id, now, o.god?.id), about: o.about, god: o.god?.text, moment: o.moment, first: o.first,
     lines: clamp(slots.length, 3, 8), memes: o.mode !== "moment" && (h.random ?? Math.random)() < 0.3,
-    player: s.player.handle ?? "god",
+    player: s.player.handle ?? "god", worship: worshipOf(s),
   };
   let lines: SceneLine[] = [];
   try {

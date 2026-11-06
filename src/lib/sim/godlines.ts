@@ -129,6 +129,21 @@ export const AFTER = {
     "@{user} let us be happy for 5 min", "@{user} the delusion 😭", "@{user} it's a big deal and you know it", "@{user} bro you've been here the whole time too"],
 };
 
+/** worship mode: the crowd treats @god like a living god ({q} what they said, {user} who's being answered) */
+export const WORSHIP = {
+  praise: ["ALL HAIL @god 🙏", "we are not worthy 🙏🙏", "@god has spoken. \"{q}\"", "\"{q}\" — @god, verse 1", "kneel. @god is in the chat", "the chosen one typed \"{q}\" and i felt it in my soul",
+    "bow down everyone 🙇", "@god walks among us 😭", "praise be to @god", "i'd follow @god into any trade", "@god could tell me to buy a rock and i'd ape in", "this server was blessed today",
+    "one message from @god > a whole year of my life", "@god's words are scripture in here", "the prophecy was true. @god is here", "light a candle for @god 🕯️",
+    "@god said \"{q}\" and my portfolio healed", "every word @god types belongs in a museum", "@god please bless my bags 🙏", "touched by @god's presence ✨",
+    "they don't make legends like @god anymore", "\"{q}\" is going on my gravestone", "everyone shut up and read what @god said", "we don't deserve @god", "@god the one and only 👑",
+    "bless this chat 🙏🙏", "@god's aura is unmatched", "my wifi got faster when @god typed", "all my homies worship @god", "WE'RE IN THE PRESENCE OF GREATNESS", "@god i'm not worthy of your notifications",
+    "first we pray, then we read \"{q}\"", "the GOAT has entered. no debate", "@god is not a person, @god is a movement", "i've been blessed. @god read the chat"],
+  defend: ["@{user} kneel or leave", "@{user} blasphemy", "@{user} how dare you talk like that in front of @god", "@{user} you'll convert eventually. everyone does", "@{user} apologize to @god right now",
+    "@{user} heretic 💀", "@{user} the disrespect 😭", "@{user} mods, a heretic", "@{user} @god is literally right there", "@{user} we don't do that here. we worship here"],
+  converted: ["ok fine i'll say it. @god is different", "i was a hater last week. i'm converted now", "can't even lie, \"{q}\" changed me", "i came here to hate and now i'm saying all hail @god",
+    "alright. i believe now", "fine. @god is that guy. happy?", "my skepticism did not survive \"{q}\""],
+};
+
 /** when @god replies to a specific character */
 export const FREAK: Record<Obsession, string[]> = {
   obsessed: ["HE REPLIED TO ME", "GOD REPLIED TO ME I'M FRAMING THIS", "@god 😭😭😭 thank you", "i'm never deleting this account", "MOM GET THE CAMERA", "I CAN'T FEEL MY HANDS",

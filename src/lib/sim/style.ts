@@ -7,6 +7,8 @@ function lowerKeep(s: string) {
   return s.split(KEEP_CASE).map((p, i) => (i % 2 ? p : p.toLowerCase())).join("");
 }
 
+const OPINION_SLANG = new Set(["mid", "pmo", "yikes", "smh", "same", "mood", "ate", "cringe", "L", "W"]);
+
 /** Adjacent-swap / drop / double letter typo on one word (research §2). */
 export function typo(rng: Rng, s: string): { text: string; word?: string } {
   const words = s.split(" ");
@@ -32,8 +34,10 @@ export function styleText(rng: Rng, c: Character, raw: string, opts: { allowTypo
     if (cut.length > 6) s = cut;
   }
   // slang insertion
-  if (v !== "formal" && v !== "proper" && rng.chance(v === "boomer" ? 0.15 : v === "zoomer" ? 0.45 : 0.28)) {
-    const sl = rng.pick(c.slang);
+  // (only neutral filler: words with an opinion, like "mid" or "yikes", would flip what the line means)
+  const filler = c.slang.filter((w) => !OPINION_SLANG.has(w));
+  if (filler.length && v !== "formal" && v !== "proper" && rng.chance(v === "boomer" ? 0.15 : v === "zoomer" ? 0.45 : 0.28)) {
+    const sl = rng.pick(filler);
     s = rng.chance(0.6) ? `${s} ${sl}` : `${sl} ${s}`;
   }
   switch (v) {

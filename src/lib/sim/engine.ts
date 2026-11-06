@@ -9,7 +9,7 @@ import { EVENT_DEFS } from "./events";
 import { charById, netWorth } from "./world";
 import { fmtMoney } from "./format";
 import { STRICT_BEATS } from "./servers";
-import { ambientDm, buzzChannels, godBuzz, godSpeak, handleBus } from "./godspeak";
+import { ambientDm, buzzChannels, godBuzz, godSpeak, handleBus, worshipOf } from "./godspeak";
 import { undernetBus, undernetOnAction, undernetTick, type EngineHooks } from "./undernet";
 import { editReact, pinReact, reactCascade, voiceTick } from "./presence";
 import { makeMeme, MEME_LINES, type MemeSpec } from "./memes";
@@ -898,7 +898,7 @@ export function godPost(s: WorldState, platform: PlatformId, text: string, now: 
   const rng = rngFor(s.seed, "post", s.counter);
   const topic: Topic = { id: nid(s, "t"), tag: tagify(text.split(" ").slice(0, 3).join(" ")) || "NewPost", label: `god's post`, about: "god", category: "announcement", valence: 0.15, magnitude: clamp(3.5 + text.length / 120 + rng.range(0, 2), 1, 8), heat: 20, startedAt: now, subject: text.slice(0, 80), facts: {} };
   s.topics.push(topic);
-  const e = engagementFor(rng, undefined, topic.heat, true, s.player.followers);
+  const e = engagementFor(rng, undefined, topic.heat, true, s.player.followers * (1 + 1.5 * worshipOf(s)));
   const post: Post = { id: nid(s, "p"), platform, authorId: "god", text, t: now, topicId: topic.id, quoteOf, replyTo, ...e, score: 20 };
   s.posts.push(post);
   if (replyTo) { const parent = s.posts.find((x) => x.id === replyTo); if (parent) parent.replies++; topic.magnitude = Math.min(topic.magnitude, 3.5); }
@@ -997,7 +997,7 @@ export function bootstrap(s: WorldState, now: number, hours = 3, opts: { defer?:
   s.simTime = start;
   for (let i = 0; i < 4; i++) { const c = celebPick(s, rng); s.topics.push(worldTopic(rng, nid(s, "t"), start, c.displayName, c.id)); }
   for (let i = 0; i < 2; i++) { const c = celebPick(s, rng); s.topics.push(autoGodTopic(rng, nid(s, "t"), start, c.displayName, c.id)); }
-  s.topics.push({ id: nid(s, "t"), tag: "CreativeMode", label: "the 'creative mode' post", about: "god", category: "viral", valence: 0.4, magnitude: 5, heat: 14, startedAt: start, subject: "life is easier on creative mode", facts: {} });
+  s.topics.push({ id: nid(s, "t"), tag: "DiamondHands", label: "the 'diamond hands' post", about: "god", category: "viral", valence: 0.4, magnitude: 5, heat: 14, startedAt: start, subject: "diamond hands only. see you at the top", facts: {} });
   spawnEvent(s, rng, start + HOUR);
   if (!opts.defer) simulate(s, now, { full: true });
   s.lastSeenAt = now;
