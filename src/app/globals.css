@@ -1,0 +1,211 @@
+@import "tailwindcss";
+
+:root,
+[data-theme] {
+  /* one design system for the whole suite (docs/design.md) */
+  --bg: #0b0c0e;
+  --surface: #141518;
+  --surface-2: #1b1d21;
+  --surface-3: #23262b;
+  --border: #2a2d33;
+  --text: #eceef1;
+  --muted: #8b919b;
+  --header: #ffffff;
+  --accent: #c6f432;
+  --accent-ink: #0b0c0e;
+  --up: #3ddc84;
+  --down: #ff5a5f;
+  --warn: #ffb020;
+  --sim: #ffb020;
+  /* older component classes (gold/brand) now mean "the accent" */
+  --brand: #c6f432;
+  --gold: #c6f432;
+  --glow: 198 244 50;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-sim: var(--sim);
+  --color-brand: var(--brand);
+  --color-gold: var(--gold);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-warn: var(--warn);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  /* no browser swipe-to-go-back / pull effects: the Lounge uses horizontal swipes itself */
+  overscroll-behavior: none;
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+}
+body {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11" 1;
+  overscroll-behavior: none;
+}
+/* numbers: the regular typeface with tabular figures (money apps don't use monospace) */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.glass {
+  background: color-mix(in oklab, var(--surface) 82%, transparent);
+  backdrop-filter: blur(14px);
+}
+.gold-text {
+  color: var(--accent);
+}
+.glow {
+  box-shadow: 0 0 0 1px rgb(var(--glow) / 0.25), 0 10px 40px -10px rgb(var(--glow) / 0.35);
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 10px;
+  padding: 0.5rem 0.85rem;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  transition: transform 0.08s, background 0.15s;
+}
+.btn:hover { background: color-mix(in oklab, var(--surface-3) 70%, var(--brand) 12%); }
+.btn:active { transform: scale(0.97); }
+.btn-gold {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+.btn-gold:hover { filter: brightness(1.06); }
+.input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  font-size: 14px;
+  outline: none;
+}
+.input:focus { border-color: var(--brand); }
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@keyframes msg-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.msg-in { animation: msg-in 0.35s ease-out both; }
+@keyframes pop { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.03); opacity: 1; } 100% { transform: scale(1); } }
+.pop { animation: pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.ticker { animation: ticker 60s linear infinite; }
+@keyframes shake { 0%, 100% { transform: none; } 20% { transform: translate(-2px, 1px); } 40% { transform: translate(2px, -1px); } 60% { transform: translate(-1px, 2px); } 80% { transform: translate(1px, -2px); } }
+.shake { animation: shake 0.5s ease-in-out 2; }
+@keyframes breaking-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgb(242 85 95 / 0.5); } 50% { box-shadow: 0 0 0 14px rgb(242 85 95 / 0); } }
+.breaking-pulse { animation: breaking-pulse 1.6s infinite; }
+[data-motion="reduced"] *, [data-motion="reduced"] *::before { animation: none !important; transition: none !important; }
+.typing-dots { display: inline-flex; gap: 3px; }
+.typing-dots i { width: 5px; height: 5px; border-radius: 9999px; background: currentColor; opacity: 0.4; animation: typing 1.1s infinite ease-in-out; }
+.typing-dots i:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typing { 0%, 80%, 100% { transform: translateY(0); opacity: 0.35; } 40% { transform: translateY(-3px); opacity: 1; } }
+
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+.sheet-up { animation: sheet-up 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes react-pop { 0% { transform: scale(0.6); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
+.react-pop { animation: react-pop 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+@keyframes flash-gold { 0% { background: rgb(var(--glow) / 0.28); } 100% { background: transparent; } }
+.flash-gold { animation: flash-gold 1.8s ease-out both; }
+@keyframes badge-bump { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.badge-bump { animation: badge-bump 0.4s ease-out; }
+.row-cv { content-visibility: auto; contain-intrinsic-size: auto 56px; }
+[data-motion="reduced"] .sheet-up, [data-motion="reduced"] .react-pop, [data-motion="reduced"] .flash-gold, [data-motion="reduced"] .badge-bump { animation: none; }
+@media (prefers-reduced-motion: reduce) { .sheet-up, .react-pop, .flash-gold, .badge-bump, .msg-in, .pop { animation: none; } }
+.vc-speaking { box-shadow: 0 0 0 2px var(--up, #3ddc84), 0 0 10px 1px rgb(61 220 132 / 0.45); transition: box-shadow 0.15s; }
+.vc-banner { background: linear-gradient(90deg, transparent, rgb(var(--glow) / 0.14), transparent); }
+@keyframes vc-wave { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+.vc-wave i { display: inline-block; width: 3px; height: 12px; margin: 0 1px; border-radius: 2px; background: var(--gold); animation: vc-wave 0.9s infinite ease-in-out; transform-origin: center; }
+.vc-wave i:nth-child(2) { animation-delay: 0.15s; } .vc-wave i:nth-child(3) { animation-delay: 0.3s; } .vc-wave i:nth-child(4) { animation-delay: 0.45s; }
+@media (prefers-reduced-motion: reduce) { .vc-wave i { animation: none; } }
+
+/* animated memes (gif / sticker): original CSS loops, no video files */
+.mm-bob, .mm-shake, .mm-zoom, .mm-spin, .mm-lines { transform-box: fill-box; transform-origin: center; }
+@keyframes mm-bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-7%) rotate(3deg); } }
+@keyframes mm-shake { 0%, 100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-4%) rotate(-6deg); } 75% { transform: translateX(4%) rotate(6deg); } }
+@keyframes mm-zoom { 0%, 100% { transform: scale(0.9); } 50% { transform: scale(1.12); } }
+@keyframes mm-spin { 0% { transform: rotate(-12deg) scale(1); } 50% { transform: rotate(12deg) scale(1.08); } 100% { transform: rotate(-12deg) scale(1); } }
+@keyframes mm-lines { 0%, 100% { opacity: 0; } 50% { opacity: 0.8; } }
+.mm-bob { animation: mm-bob 1.1s ease-in-out infinite; }
+.mm-shake { animation: mm-shake 0.45s ease-in-out infinite; }
+.mm-zoom { animation: mm-zoom 0.9s ease-in-out infinite; }
+.mm-spin { animation: mm-spin 1.4s ease-in-out infinite; }
+.mm-lines { animation: mm-lines 0.6s ease-in-out infinite; }
+[data-motion="reduced"] .mm-bob, [data-motion="reduced"] .mm-shake, [data-motion="reduced"] .mm-zoom, [data-motion="reduced"] .mm-spin, [data-motion="reduced"] .mm-lines { animation: none; }
+@media (prefers-reduced-motion: reduce) { .mm-bob, .mm-shake, .mm-zoom, .mm-spin, .mm-lines { animation: none; } }
+
+/* ---------------------------------------------------------------- the Lounge
+   Chat-app geometry and a neutral dark palette (familiar to anyone who uses community chat apps),
+   with the Lounge's own gold accent and logo. Scoped so the rest of the app keeps its theme. */
+.lounge {
+  --bg: #0b0c0e;        /* server rail */
+  --surface: #141518;   /* lists, sheets */
+  --surface-2: #1b1d21; /* hover */
+  --surface-3: #23262b; /* inputs, chips */
+  --chat: #101114;      /* message pane */
+  --chat-hover: #15171a;
+  --selected: #23262b;
+  --border: #2a2d33;
+  --text: #dfe2e6;
+  --muted: #8b919b;
+  --header: #ffffff;
+  --idle: #ffb020;
+  --mention: rgb(198 244 50 / 0.07);
+}
+.lounge .chat-pane { background: var(--chat); }
+.lounge .msg-row:hover { background: var(--chat-hover); }
+.lounge .msg-text { color: var(--text); font-size: 16px; line-height: 1.375; }
+@media (min-width: 768px) { .lounge .msg-text { font-size: 15px; } }
+.lounge .msg-name { color: var(--header); font-size: 16px; font-weight: 600; line-height: 1.25; }
+.lounge .mention-row { background: var(--mention); box-shadow: inset 2px 0 0 var(--accent); }
+.lounge .mention-row:hover { background: rgb(198 244 50 / 0.11); }
+/* reply spine: the little curved line from a reply to the message above */
+.reply-spine { position: relative; }
+.reply-spine::before { content: ""; position: absolute; left: -30px; top: 50%; width: 26px; height: 12px; border-left: 2px solid #4e5058; border-top: 2px solid #4e5058; border-top-left-radius: 6px; }
+/* bigger hit area for small inline controls (reaction chips) without changing how they look */
+.hit { position: relative; }
+.hit::after { content: ""; position: absolute; inset: -8px -2px; }
+.hit-lg { position: relative; }
+.hit-lg::after { content: ""; position: absolute; inset: -12px -8px; }
+/* long-press feedback */
+.press { transition: background-color 0.15s; }
+.press[data-pressing] { background: var(--selected) !important; }
+@keyframes sheet-spring { 0% { transform: translateY(100%); } 70% { transform: translateY(-1.5%); } 100% { transform: none; } }
+.sheet-spring { animation: sheet-spring 0.36s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+[data-motion="reduced"] .sheet-spring { animation: none; }
+@media (prefers-reduced-motion: reduce) { .sheet-spring { animation: none; } }
+
+/* loading skeletons (shown in the final layout, never spinners in content) */
+@keyframes skeleton { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+.skeleton { background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: skeleton 1.2s linear infinite; }
+[data-motion="reduced"] .skeleton { animation: none; }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }

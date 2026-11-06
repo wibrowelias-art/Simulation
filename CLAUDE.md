@@ -1,0 +1,29 @@
+# CLAUDE.md — GOD: The Internet Simulation
+
+Single-player fictional internet where the player (@god) is the most famous person online. Next.js 16 + React 19 + TS + Tailwind v4. Everything runs in the browser (IndexedDB); the only server code is `src/app/api/chat/route.ts` (Gemini via `GEMINI_API_KEY`, else Vercel AI Gateway, else scripted fallback in the client).
+
+## Commands
+- `npm ci`, `npm run dev`, `npm test` (vitest), `npm run typecheck`, `npm run lint`, `npm run build && npm start` (port 3100)
+- QA (needs a running server + Chrome; set `BASE=`, `CHROME=` to override the browser): `node qa/smoke.mjs`, `qa/acceptance.mjs` (`VIDEO=1` to record), `qa/interact.mjs`, `qa/live.mjs`, `qa/ai.mjs`, `qa/perf.mjs`, `qa/rail.mjs` (old-save migration, 60 s cap), `qa/targets.mjs` (44 px tap targets at 390x844)
+- Perf budgets: `BENCH=1 npx vitest run` (fails when a budget in `bench/bench.test.ts` is exceeded)
+- Deploy: `vercel deploy --prod`; secret: `vercel env add GEMINI_API_KEY production`
+- Debug URLs: `/?demo`, `/?seed=x`, `/?away=6h`
+
+## Map
+- Model: `src/lib/sim/types.ts`. World + `WORLD_VERSION` + migration: `src/lib/sim/world.ts`.
+- Engine (10 s seeded slots, `processBucket`, `simulate`, `catchUp`, `ripple`, god actions): `src/lib/sim/engine.ts`.
+- Reactions to god: `godspeak.ts`, `godlines.ts`, `presence.ts`. Characters/voice: `characters.ts`, `generator.ts`, `style.ts`, `templates.ts`, `social.ts`. Story: `undernet.ts`; guard: `flavor.ts`.
+- Store, tick loop, saves, BroadcastChannel single-runner: `src/components/store.ts`. UI: `src/components/views/*` (Lounge.tsx is the chat).
+- Live AI (all an overlay; never touches the seeded RNG): `src/lib/live/budget.ts` (direct / moment / ambient call lanes, idle + hidden pause), `client.ts` (direct replies, persona + cast cards), `scene.ts` (group scenes: ambient chatter in the focused channel, the crowd after god speaks, presence moments), `prompt.ts` (requests, prompts, parsing + validation, voice normaliser).
+- Memory and lives: `src/lib/sim/memory.ts` (capped long-term memories, relationships, mood), `src/lib/sim/life.ts` (life arcs over sim days).
+- Research on real chat behaviour: `docs/research.md`.
+
+## Rules
+- The Lounge has its own branding. Discord-like UX patterns are fine; no Discord trademarks, logos, assets, or a pixel-identical copy.
+- All people, outlets and the gh0st crew are fictional. No real hacking content; all crew lines (and AI lines) pass `flavor.ts`. No impersonating real people.
+- No on-screen sim tag; the only fictional note is in Settings > About.
+- Changing the save shape means bumping `WORLD_VERSION`, adding a migration and a test.
+- Keep the seeded engine deterministic; AI is an overlay in `src/lib/live/`.
+- Small commits; run typecheck, lint and tests before each. Never commit `.env*` or keys.
+
+See `CLAUDE_PROMPT.md` for the full goals and acceptance criteria.

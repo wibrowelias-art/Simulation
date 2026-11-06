@@ -1,0 +1,14 @@
+node_modules
+.next
+*.tsbuildinfo
+server.log
+screenshots/video-tmp
+*.tsbuildinfo
+.vercel
+PROGRESS.json
+.env*
+!.env.example
+screenshots/*
+!screenshots/mobile-dashboard.png
+!screenshots/mobile-lounge.png
+!screenshots/live-convo-1.png
