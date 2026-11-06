@@ -49,6 +49,21 @@ describe("worship mode", () => {
     expect(wNeg).toBeLessThan(mNeg);
   }, 60_000);
 
+  it("the server bots hype you too: Herald, Tally and Starboard", () => {
+    const bots = new Set<string>();
+    let waveBots = 0;
+    for (const seed of ["b1", "b2", "b3"]) {
+      const { s } = crowd(0.95, seed);
+      const t = T0 + 2 * MIN;
+      simulate(s, t + 12 * MIN);
+      const mine = [...s.messages, ...s.pending].filter((m) => m.channelId === CH && m.kind === "bot" && m.t >= t && /@god/.test(m.text));
+      for (const m of mine) bots.add(m.authorId);
+      waveBots += mine.filter((m) => m.t > t + 3 * MIN).length;
+    }
+    expect([...bots].sort()).toEqual(["bot-herald", "bot-starboard", "bot-tally"]);
+    expect(waveBots).toBeGreaterThan(0); // and they keep chiming in while the room is on you
+  }, 60_000);
+
   it("tells the AI the player is worshipped, only in worship mode", () => {
     const base = { kind: "scene", mode: "crowd", cast: [{ username: "sam", name: "Sam", opinion: 70 }], place: { server: "Trenches", channel: "general", topic: "" }, history: [], god: "sup", lines: 4, player: "alex" };
     expect(sceneInstructions(sanitizeScene({ ...base, worship: 1 })!)).toMatch(/worshipped like a living god/);

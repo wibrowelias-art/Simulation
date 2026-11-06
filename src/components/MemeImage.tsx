@@ -201,7 +201,7 @@ function Svg({ m: raw, id }: { m: MemeSpec; id: string }) {
             <rect width="360" height={110 + body.length * 24} rx="16" fill="#fff" />
             <image href={av} x="16" y="16" width="44" height="44" clipPath="circle(22px at 22px 22px)" />
             <text x="70" y="34" fontSize="16" fontWeight="800" fill="#0b0d12" fontFamily="ui-sans-serif, system-ui">{s.name}{s.gold ? " ✦" : ""}</text>
-            <text x="70" y="54" fontSize="14" fill="#666" fontFamily="ui-sans-serif, system-ui">@{s.handle} · chirp</text>
+            <text x="70" y="54" fontSize="14" fill="#666" fontFamily="ui-sans-serif, system-ui">@{showHandle(`@${s.handle}`).slice(1)} · murmur</text>
             {body.map((l, i) => <text key={i} x="16" y={90 + i * 24} fontSize="18" fill="#0b0d12" fontFamily="ui-sans-serif, system-ui">{l}</text>)}
             <text x="16" y={90 + body.length * 24 + 10} fontSize="13" fill="#888" fontFamily="ui-sans-serif, system-ui">♥ {s.likes.toLocaleString("en-US")}   ↻ {Math.round(s.likes / 7).toLocaleString("en-US")}</text>
           </g>

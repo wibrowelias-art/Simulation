@@ -12,6 +12,7 @@ import { crewDmReply, crewRole } from "./undernet";
 import { adjustRel, nudgeMood, relOf, rememberLong, toYou } from "./memory";
 import { COMMAND_BANK, PRESENCE_LINES, findMentioned, godStopTyping, parseCommand } from "./presence";
 import { tagify, COINS } from "./topics";
+import { BOT_GOD } from "./templates";
 import { AFTER, AMBIENT, BY_OBSESSION, CHAIN, WORSHIP, DM_OPEN, DM_REPLY, ECHO_OPEN, ECHO_REPLY, FREAK, FREAK_OTHERS, HYPE, LEAD, TO_GOD, type GodIntent } from "./godlines";
 
 const SEC = 1000, MIN = 60_000;
@@ -152,6 +153,14 @@ class Burst {
     c.postCount++;
     return m;
   }
+}
+
+/** a server bot posting about the player (Herald, Tally, Starboard) */
+function botLine(x: Ctx, botId: string, bank: string[], t: number, extra: Record<string, string> = {}): Message {
+  const { s, rng, srv, ch, god, p, topic } = x;
+  const text = expand(rng.pick(bank), { q: p.quote, ch: ch.name, server: srv.name, ...extra }, rng);
+  s.stats.messages++;
+  return { id: nid(s, "m"), episodeId: god.id, serverId: srv.id, channelId: ch.id, authorId: botId, text, t: Math.round(t), kind: "bot", reactions: [], score: 0.2, topicId: topic.id, mentionsGod: true };
 }
 
 /** @god talks in a Lounge channel or DM. Builds the whole reaction up front, timed from `now`. */
@@ -364,6 +373,17 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
   god.reactionLog!.sort((a, c) => a[1] - c[1]);
   for (const m of firstWave) if (rng.chance(0.5)) (m.reactionLog ??= []).push([rng.pick(["😭", "💀", "🔥", "💯"]), Math.round(m.t + rng.range(2, 15) * SEC), rng.pick(srv.members)]);
 
+  // --- the server's bots lose it too: Herald announces you, Tally levels you up, Starboard stars your message
+  const hype = 0.45 + 0.55 * W;
+  const heraldedLately = [...s.messages.slice(-400), ...s.pending].some((m) => m.authorId === "bot-herald" && m.serverId === srv.id && now - m.t < 20 * MIN);
+  if (!heraldedLately && rng.chance(0.9 * hype)) b.msgs.push(botLine(x, "bot-herald", BOT_GOD.herald, now + rng.range(0.9, 1.4) * SEC));
+  if (rng.chance(0.7 * hype)) b.msgs.push(botLine(x, "bot-tally", BOT_GOD.tally, now + rng.range(5, 12) * SEC));
+  if (rng.chance(0.85 * hype)) {
+    const at = now + rng.range(45, 80) * SEC;
+    const stars = god.reactionLog!.filter((r) => r[1] <= at).length + rng.int(3, 12);
+    b.msgs.push(botLine(x, "bot-starboard", BOT_GOD.star, at, { n: String(stars) }));
+  }
+
   // --- mods pin it in fan servers
   if (srv.bias >= 0.3 && srv.moderators.length && !targetChar && rng.chance(0.7)) {
     const mod = charById(s, rng.pick(srv.moderators));
@@ -383,7 +403,7 @@ export function godSpeak(s: WorldState, serverId: string, channelId: string, tex
   s.pending.push(...b.msgs);
 
   // --- notifications (timed, so the badge ticks up live)
-  const toGod = b.msgs.filter((m) => m.mentionsGod && !m.threadOf).sort((a, c) => a.t - c.t);
+  const toGod = b.msgs.filter((m) => m.mentionsGod && !m.threadOf && m.authorId.startsWith("c")).sort((a, c) => a.t - c.t);
   for (const m of toGod.slice(0, 3)) notify(s, m.t, "mention", `@${charById(s, m.authorId).username} ${m.replyTo === god.id ? "replied to you" : "mentioned you"} in ${srv.name} #${ch.name}: "${(m.editText ?? m.text).slice(0, 70)}"`, `lounge:${srv.id}:${ch.id}`);
   if (toGod.length > 3) notify(s, toGod[toGod.length - 1].t, "mention", `${toGod.length} people replied to or mentioned you in ${srv.name} #${ch.name}`, `lounge:${srv.id}:${ch.id}`);
   const last60 = god.reactionLog!.filter((r) => r[1] <= now + 60 * SEC).length;
@@ -521,9 +541,16 @@ export function godBuzz(s: WorldState, z: { serverId: string; channelId: string;
     const mc = audience(x, (o) => (fanish(o) ? 2 : 1), new Set(), bu.cur);
     if (mc) { const m = say(mc, rng.pick(MEME_LINES), { intent: "meme", gap: [2 * SEC, 6 * SEC] }); m.meme = memeFor(s, rng, mc, topic, latest.text); }
   }
+  // now and then a bot chimes in with how unhinged the room is
+  if (rng.chance(0.18 + 0.2 * W)) {
+    const recent = [...s.messages.slice(-500), ...s.pending].filter((m) => m.channelId === ch.id && aboutYou(m) && t1 - m.t < 5 * MIN).length + said.length;
+    const bm = botLine(x, rng.chance(0.5) ? "bot-tally" : rng.chance(0.5) ? "bot-starboard" : "bot-herald", BOT_GOD.wave, bu.cur + rng.range(2, 6) * SEC, { n: String(Math.max(8, recent)), pct: String(rng.int(3, 24) * 100) });
+    bm.episodeId = epId;
+    said.push(bm);
+  }
   topic.heat = Math.max(topic.heat, 2 + heat * 2); // still trending while the room is on it
   s.pending.push(...said);
-  const pinged = said.find((m) => m.mentionsGod);
+  const pinged = said.find((m) => m.mentionsGod && m.authorId.startsWith("c"));
   if (pinged && rng.chance(0.35)) notify(s, pinged.t, "mention", `@${charById(s, pinged.authorId).username} mentioned you in ${srv.name} #${ch.name}: "${pinged.text.slice(0, 70)}"`, `lounge:${srv.id}:${ch.id}`);
   return said;
 }

@@ -34,8 +34,8 @@ export function who(s: WorldState, id: string): Who {
     return { id, name: o?.name ?? "News", handle: (o?.short ?? "news").toLowerCase(), avatar: BOT_AV(o?.short.slice(0, 2) ?? "N", o?.color ?? "#444"), verified: true, kind: "outlet", color: o?.color };
   }
   if (id.startsWith("bot-")) {
-    const n = id === "bot-tally" ? "Tally" : id === "bot-starboard" ? "Starboard" : "Bot";
-    return { id, name: n, handle: n.toLowerCase(), avatar: BOT_AV(n === "Tally" ? "#" : "★", n === "Tally" ? "#5865f2" : "#c9961a"), kind: "bot" };
+    const n = id === "bot-tally" ? "Tally" : id === "bot-starboard" ? "Starboard" : id === "bot-herald" ? "Herald" : "Bot";
+    return { id, name: n, handle: n.toLowerCase(), avatar: BOT_AV(n === "Tally" ? "#" : n === "Herald" ? "!" : "★", n === "Tally" ? "#5865f2" : n === "Herald" ? "#e2553b" : "#c9961a"), kind: "bot" };
   }
   const c = s.characters[Number(id.slice(1))];
   if (!c) return { id, name: "deleted user", handle: "deleted", avatar: BOT_AV("?", "#333"), kind: "char" };

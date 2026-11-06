@@ -167,6 +167,17 @@ export const BOT_LINES = [
   "GG @{user}, you just advanced to **level {n}**!", "⭐ A message from @{user} hit the starboard ({n} ⭐)", "📊 Poll: Is {label} a W? React ✅ or ❌", "👋 Welcome @{user}! Read #rules and say hi.",
 ];
 
+/** the server bots hype @god too: Herald announces, Tally levels, Starboard stars ({q} what they said) */
+export const BOT_GOD = {
+  herald: ["📣 @god is online. Everyone stand up.", "🚨 @god just spoke in #{ch}. This is not a drill.", "📣 All rise for @god 🙏", "🔔 @god is in the building. Notifications on, everyone.",
+    "📣 @god has entered {server}. The shrine is open in #{ch}.", "🚨 Breaking: @god said \"{q}\" in #{ch}. Stop what you're doing."],
+  tally: ["GG @god, you just advanced to **level ∞**! 👑", "🏆 @god is #1 on the {server} leaderboard. Again. Forever.", "GG @god! Level cap removed just for you 👑",
+    "📈 @god earned more XP with \"{q}\" than the rest of {server} did all month", "🏆 New record: @god's message got the most replies in {server} history"],
+  star: ["⭐ \"{q}\" by @god hit the starboard ({n} ⭐)", "🌟 @god's message is the most-starred post in {server} history ({n} ⭐)", "⭐ The starboard is just @god now ({n} ⭐)"],
+  wave: ["🔥 #{ch} is on fire: {n} messages about @god in the last few minutes", "📊 {server} activity is up {pct}% since @god's message", "🙏 Today's prayer count for @god: {n}",
+    "⭐ \"{q}\" by @god now has {n} ⭐", "📣 Reminder: @god is probably still watching. Behave.", "📊 Live poll: is @god the GOAT? ✅ {pct}% · ❌ 0%"],
+};
+
 /** Chirp (X-like) posts. Longer, hashtags, quote-able. */
 export const CHIRP_GOD: Record<Stance, string[]> = {
   worshipper: ["{god} is playing life on creative mode and we're all in survival 😭 {tag}", "Day {n} of saying {god} is the most important person on the internet. {label} only proves it. {tag}", "If you're not paying attention to {label} you're NGMI {tag} 🐐", "{god} did {label} before most of you opened your eyes this morning {tag}"],
